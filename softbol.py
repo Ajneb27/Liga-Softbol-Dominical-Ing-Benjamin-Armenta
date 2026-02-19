@@ -8,6 +8,7 @@ if not os.path.exists(CARPETA_DATOS): os.makedirs(CARPETA_DATOS)
 
 def ruta(archivo): return os.path.join(CARPETA_DATOS, archivo)
 
+# Aseguramos que H2 esté en Jugadores y JP en Pitchers
 COLS_J = ["Nombre", "Equipo", "VB", "H", "H2", "H3", "HR"]
 COLS_P = ["Nombre", "Equipo", "JG", "JP", "IP", "CL"] 
 
@@ -16,6 +17,7 @@ def cargar_datos(archivo, columnas):
     if os.path.exists(path):
         df = pd.read_csv(path)
         df.columns = df.columns.str.strip()
+        # Reparación automática de columnas faltantes
         for col in columnas:
             if col not in df.columns: df[col] = 0
         cols_num = [c for c in columnas if c not in ["Nombre", "Equipo"]]
@@ -50,40 +52,40 @@ es_admin = st.session_state.autenticado
 menu = st.sidebar.radio("MENÚ:", ["🏠 Inicio", "🏆 TOP 10 LÍDERES", "📋 Rosters por Equipo", "🏃 Estadísticas (Admin)", "👥 Equipos"])
 
 # ==========================================
-# SECCIÓN: TOP 10 LÍDERES
+# SECCIÓN: TOP 10 LÍDERES (RESTABLECIDA)
 # ==========================================
 if menu == "🏆 TOP 10 LÍDERES":
-    tab_b, tab_p = st.tabs(["🥖 Líderes de Bateo", "🔥 Líderes de Pitcheo"])
+    tab_b, tab_p = st.tabs(["🥖 Bateo", "🔥 Pitcheo"])
     
     with tab_b:
-        st.header("🏆 Cuadro de Honor: Bateo")
+        st.header("🏆 Líderes de Bateo")
         df_l = st.session_state.jugadores.copy()
         if not df_l.empty:
             df_l['Hits_Totales'] = df_l['H'] + df_l['H2'] + df_l['H3'] + df_l['HR']
             df_l['AVG'] = (df_l['Hits_Totales'] / df_l['VB'].replace(0, 1)).fillna(0)
+            
             c1, c2 = st.columns(2)
-            c1.subheader("🥇 Average (AVG)")
+            c1.subheader("🥇 AVG")
             c1.table(df_l.sort_values("AVG", ascending=False).head(10)[["Nombre", "AVG"]].style.format({"AVG": "{:.3f}"}))
-            c2.subheader("🥇 Jonrones (HR)")
-            c2.table(df_l.sort_values("HR", ascending=False).head(10)[["Nombre", "HR"]])
+            c2.subheader("🥇 Dobles (H2)") # Restaurado
+            c2.table(df_l.sort_values("H2", ascending=False).head(10)[["Nombre", "H2"]])
+            
             c3, c4 = st.columns(2)
-            c3.subheader("🥇 Hits Totales")
-            c3.table(df_l.sort_values("Hits_Totales", ascending=False).head(10)[["Nombre", "Hits_Totales"]])
+            c3.subheader("🥇 Jonrones (HR)")
+            c3.table(df_l.sort_values("HR", ascending=False).head(10)[["Nombre", "HR"]])
             c4.subheader("🥇 Triples (H3)")
             c4.table(df_l.sort_values("H3", ascending=False).head(10)[["Nombre", "H3"]])
-        else: st.info("Sin datos.")
 
     with tab_p:
-        st.header("🏆 Cuadro de Honor: Pitcheo")
+        st.header("🏆 Líderes de Pitcheo")
         df_p = st.session_state.pitchers.copy()
         if not df_p.empty:
             df_p['EFE'] = ((df_p['CL'] * 7) / df_p['IP'].replace(0, 1)).fillna(0)
             cp1, cp2 = st.columns(2)
-            cp1.subheader("🥇 Efectividad (EFE)")
+            cp1.subheader("🥇 Efectividad")
             cp1.table(df_p[df_p['IP'] > 0].sort_values("EFE", ascending=True).head(10)[["Nombre", "EFE"]].style.format({"EFE": "{:.2f}"}))
             cp2.subheader("🥇 Ganados (JG)")
             cp2.table(df_p.sort_values("JG", ascending=False).head(10)[["Nombre", "JG"]])
-        else: st.info("Sin datos.")
 
 # ==========================================
 # SECCIÓN: ESTADÍSTICAS ADMIN (CORREGIDA)
@@ -121,18 +123,15 @@ elif menu == "🏃 Estadísticas (Admin)":
             if sel_p != "-- Nuevo --":
                 dp = st.session_state.pitchers[st.session_state.pitchers["Nombre"] == sel_p].iloc[0]
                 vp_n, vp_eq, vp_jg, vp_jp, vp_ip, vp_cl = dp["Nombre"], dp["Equipo"], int(dp["JG"]), int(dp["JP"]), float(dp["IP"]), int(dp["CL"])
-            
             with st.form("f_pitcheo"):
                 nom_p = st.text_input("Nombre Pitcher", value=vp_n)
                 eq_p = st.selectbox("Equipo ", st.session_state.equipos["Nombre"].tolist() if not st.session_state.equipos.empty else ["N/A"])
                 c1, c2, c3, c4 = st.columns(4)
-                jg = c1.number_input("JG (Ganados)", value=vp_jg)
-                jp = c2.number_input("JP (Perdidos)", value=vp_jp) # ESTA ES LA LÍNEA CLAVE
-                ip = c3.number_input("IP (Innings)", value=vp_ip)
-                cl = c4.number_input("CL (Carreras L.)", value=vp_cl)
+                jg = c1.number_input("JG (Ganados)", value=vp_jg); jp = c2.number_input("JP (Perdidos)", value=vp_jp)
+                ip = c3.number_input("IP", value=vp_ip); cl = c4.number_input("CL", value=vp_cl)
                 if st.form_submit_button("🔥 Guardar Pitcher"):
                     st.session_state.pitchers = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != sel_p]
-                    # SE AGREGA JP AQUÍ PARA QUE SE GUARDE EN EL CSV
+                    # Aquí aseguramos que JP se guarde
                     nueva_p = pd.DataFrame([{"Nombre": nom_p, "Equipo": eq_p, "JG": jg, "JP": jp, "IP": ip, "CL": cl}])
                     st.session_state.pitchers = pd.concat([st.session_state.pitchers, nueva_p], ignore_index=True)
                     st.session_state.pitchers.to_csv(ruta("data_pitchers.csv"), index=False)
@@ -149,13 +148,13 @@ elif menu == "📋 Rosters por Equipo":
         df_r = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq_sel].copy()
         if not df_r.empty:
             df_r['AVG'] = ((df_r['H']+df_r['H2']+df_r['H3']+df_r['HR'])/df_r['VB'].replace(0,1)).fillna(0)
-            st.dataframe(df_r.style.format({"AVG": "{:.3f}"}), use_container_width=True)
+            st.dataframe(df_r[["Nombre", "VB", "H", "H2", "H3", "HR", "AVG"]].style.format({"AVG": "{:.3f}"}), use_container_width=True)
         
-        st.subheader("🔥 Pitchers (Récord)")
+        st.subheader("🔥 Pitchers")
         df_rp = st.session_state.pitchers[st.session_state.pitchers["Equipo"] == eq_sel].copy()
         if not df_rp.empty:
             df_rp['EFE'] = ((df_rp['CL'] * 7) / df_rp['IP'].replace(0, 1)).fillna(0)
-            # Mostramos JG y JP claramente en el roster
+            # Mostramos JP explícitamente en el roster
             st.dataframe(df_rp[["Nombre", "JG", "JP", "IP", "CL", "EFE"]].style.format({"EFE": "{:.2f}"}), use_container_width=True)
     else: st.warning("Crea equipos primero.")
 
