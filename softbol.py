@@ -4,7 +4,7 @@ import os
 import urllib.parse
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="LIGA SOFTBOL BENJAMIN ARMENTA", page_icon="⚾", layout="wide")
+st.set_page_config(page_title="LIGA SOFTBOL BENJAMIN ARMENTA", page_icon="⚾", layout="wide", initial_sidebar_state="collapsed")
 
 CARPETA_DATOS, CARPETA_FOTOS = "datos_liga", "galeria_liga"
 for c in [CARPETA_DATOS, CARPETA_FOTOS]:
@@ -32,19 +32,36 @@ st.session_state.pitchers = cargar_datos("data_pitchers.csv", COLS_P)
 st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
 st.session_state.calendario = cargar_datos("data_calendario.csv", COLS_CAL)
 
-# --- 2. SEGURIDAD ---
+# --- 2. SEGURIDAD Y RESPALDOS (SIDEBAR) ---
 if 'autenticado' not in st.session_state: st.session_state.autenticado = False
+
 with st.sidebar:
     st.title("⚾ MENÚ LIGA")
     if not st.session_state.autenticado:
         with st.form("login"):
-            pwd = st.text_input("Contraseña:", type="password")
+            pwd = st.text_input("Contraseña Admin:", type="password")
             if st.form_submit_button("Entrar"):
                 if pwd == "softbol2026": st.session_state.autenticado = True; st.rerun()
                 else: st.error("Incorrecta")
     else:
-        st.success("🔓 ADMIN")
+        st.success("🔓 MODO ADMIN")
         if st.button("Cerrar Sesión"): st.session_state.autenticado = False; st.rerun()
+
+    # --- NUEVA SECCIÓN DE RESPALDOS ---
+    st.divider()
+    st.subheader("💾 Respaldos de Datos")
+    
+    # Botón para Bateadores
+    csv_j = st.session_state.jugadores.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Bateadores (CSV)", csv_j, "respaldo_jugadores.csv", "text/csv", use_container_width=True)
+    
+    # Botón para Pitchers
+    csv_p = st.session_state.pitchers.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Pitchers (CSV)", csv_p, "respaldo_pitchers.csv", "text/csv", use_container_width=True)
+    
+    # Botón para Calendario
+    csv_c = st.session_state.calendario.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Calendario (CSV)", csv_c, "respaldo_calendario.csv", "text/csv", use_container_width=True)
 
 menu = st.sidebar.radio("IR A:", ["🏠 Inicio", "🏆 LÍDERES", "📊 Standings", "📋 Rosters", "📅 Programación (Admin)", "🖼️ Galería", "🏃 Estadísticas (Admin)", "👥 Equipos"])
 
@@ -64,7 +81,7 @@ if menu == "🏠 Inicio":
     st.dataframe(st.session_state.calendario, use_container_width=True, hide_index=True)
 
 # ==========================================
-# 🏆 LÍDERES (TODOS LOS DEPARTAMENTOS)
+# 🏆 LÍDERES
 # ==========================================
 elif menu == "🏆 LÍDERES":
     t1, t2 = st.tabs(["🥖 Bateo", "🔥 Pitcheo"])
@@ -177,6 +194,8 @@ elif menu == "🏃 Estadísticas (Admin)":
                 if st.form_submit_button("Guardar Bateador"):
                     df = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel]
                     pd.concat([df, pd.DataFrame([[nom, eq, vb, h, h2, h3, hr]], columns=COLS_J)], ignore_index=True).to_csv(ruta("data_jugadores.csv"), index=False); st.rerun()
+            if sel != "-- Nuevo --" and st.button("🗑️ Eliminar Jugador"):
+                st.session_state.jugadores[st.session_state.jugadores["Nombre"]!=sel].to_csv(ruta("data_jugadores.csv"), index=False); st.rerun()
         with t2:
             selp = st.selectbox("Pitcher:", ["-- Nuevo --"] + sorted(st.session_state.pitchers["Nombre"].tolist()))
             vp_n, vp_eq, vp_jg, vp_jp, vp_ip, vp_cl = "", "", 0, 0, 0, 0
@@ -190,6 +209,8 @@ elif menu == "🏃 Estadísticas (Admin)":
                 if st.form_submit_button("Guardar Pitcher"):
                     dfp = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != selp]
                     pd.concat([dfp, pd.DataFrame([[nom_p, eq_p, jg, jp, ip, cl]], columns=COLS_P)], ignore_index=True).to_csv(ruta("data_pitchers.csv"), index=False); st.rerun()
+            if selp != "-- Nuevo --" and st.button("🗑️ Eliminar Pitcher"):
+                st.session_state.pitchers[st.session_state.pitchers["Nombre"]!=selp].to_csv(ruta("data_pitchers.csv"), index=False); st.rerun()
 
 # ==========================================
 # 👥 EQUIPOS
