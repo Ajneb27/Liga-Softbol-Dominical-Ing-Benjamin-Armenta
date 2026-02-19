@@ -10,18 +10,26 @@ if not os.path.exists(CARPETA_DATOS):
 def ruta(archivo):
     return os.path.join(CARPETA_DATOS, archivo)
 
-# Inicializar base de datos con todas las categorías de bases
+# --- FUNCIÓN CLAVE: REPARA EL ERROR DE COLUMNAS FALTANTES ---
+def reparar_columnas(df):
+    columnas_necesarias = ["Nombre", "Edad", "Equipo", "H", "H2", "H3", "HR"]
+    for col in columnas_necesarias:
+        if col not in df.columns:
+            df[col] = 0  # Si no existe, la crea con ceros
+    return df
+
 def inicializar_datos():
     if 'equipos' not in st.session_state:
-        st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
+        if os.path.exists(ruta("data_equipos.csv")):
+            st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv"))
+        else:
+            st.session_state.equipos = pd.DataFrame(columns=["Nombre"])
 
     if 'jugadores' not in st.session_state:
         if os.path.exists(ruta("data_jugadores.csv")):
-            df = pd.read_csv(ruta("data_jugadores.csv"))
-            # Asegurar que existan todas las columnas de hits
-            for col in ["H", "H2", "H3", "HR"]:
-                if col not in df.columns: df[col] = 0
-            st.session_state.jugadores = df
+            df_temp = pd.read_csv(ruta("data_jugadores.csv"))
+            # REPARAMOS ANTES DE CARGAR
+            st.session_state.jugadores = reparar_columnas(df_temp)
         else:
             st.session_state.jugadores = pd.DataFrame(columns=["Nombre", "Edad", "Equipo", "H", "H2", "H3", "HR"])
 
@@ -40,10 +48,10 @@ with st.sidebar.form("login_form"):
 pass_maestra = open(ruta("config.txt"), "r").read().strip() if os.path.exists(ruta("config.txt")) else "softbol2026"
 es_admin = (pwd_input == pass_maestra)
 
-menu = st.sidebar.radio("MENÚ:", ["🏠 Inicio", "👥 Equipos", "🏃 Jugadores y Stats", "📊 Consulta por Equipo"])
+menu = st.sidebar.radio("IR A:", ["🏠 Inicio", "👥 Equipos", "🏃 Jugadores y Stats", "📊 Consulta por Equipo"])
 
 # ==========================================
-# SECCIÓN: JUGADORES (H, H2, H3, HR)
+# SECCIÓN: JUGADORES (YA NO DARÁ ERROR)
 # ==========================================
 if menu == "🏃 Jugadores y Stats":
     st.header("🏃 Gestión de Jugadores y Estadísticas")
@@ -63,11 +71,12 @@ if menu == "🏃 Jugadores y Stats":
                         guardar_datos(); st.rerun()
 
         st.divider()
-        st.subheader("✏️ Actualizar Estadísticas (H, H2, H3, HR)")
+        st.subheader("✏️ Actualizar Estadísticas (H2=Dobles, H3=Triples)")
         if not st.session_state.jugadores.empty:
             j_sel = st.selectbox("Selecciona Jugador:", st.session_state.jugadores['Nombre'])
-            idx = st.session_state.jugadores[st.session_state.jugadores['Nombre'] == j_sel].index[0]
-            datos_j = st.session_state.jugadores.iloc[idx]
+            # Usamos loc para evitar errores de índice
+            datos_j = st.session_state.jugadores[st.session_state.jugadores['Nombre'] == j_sel].iloc[0]
+            idx_j = st.session_state.jugadores[st.session_state.jugadores['Nombre'] == j_sel].index[0]
             
             with st.form("edit_stats_pro"):
                 c1, c2, c3 = st.columns(3)
@@ -75,7 +84,7 @@ if menu == "🏃 Jugadores y Stats":
                 eedad = c2.number_input("Edad", 5, 90, int(datos_j['Edad']))
                 eequipo = c3.selectbox("Equipo", lista_eq, index=lista_eq.index(datos_j['Equipo']) if datos_j['Equipo'] in lista_eq else 0)
                 
-                st.write("--- **Ingreso de Hits por tipo** ---")
+                st.write("--- **Bateo Acumulado** ---")
                 c4, c5, c6, c7 = st.columns(4)
                 eh = c4.number_input("Sencillos (H)", 0, value=int(datos_j['H']))
                 eh2 = c5.number_input("Dobles (H2)", 0, value=int(datos_j['H2']))
@@ -83,24 +92,20 @@ if menu == "🏃 Jugadores y Stats":
                 ehr = c7.number_input("Jonrones (HR)", 0, value=int(datos_j['HR']))
                 
                 if st.form_submit_button("Guardar Cambios"):
-                    st.session_state.jugadores.at[idx, 'Nombre'] = enom
-                    st.session_state.jugadores.at[idx, 'Edad'] = eedad
-                    st.session_state.jugadores.at[idx, 'Equipo'] = eequipo
-                    st.session_state.jugadores.at[idx, 'H'] = eh
-                    st.session_state.jugadores.at[idx, 'H2'] = eh2
-                    st.session_state.jugadores.at[idx, 'H3'] = eh3
-                    st.session_state.jugadores.at[idx, 'HR'] = ehr
+                    st.session_state.jugadores.at[idx_j, 'Nombre'] = enom
+                    st.session_state.jugadores.at[idx_j, 'Edad'] = eedad
+                    st.session_state.jugadores.at[idx_j, 'Equipo'] = eequipo
+                    st.session_state.jugadores.at[idx_j, 'H'] = eh
+                    st.session_state.jugadores.at[idx_j, 'H2'] = eh2
+                    st.session_state.jugadores.at[idx_j, 'H3'] = eh3
+                    st.session_state.jugadores.at[idx_j, 'HR'] = ehr
                     guardar_datos(); st.success("¡Estadísticas actualizadas!"); st.rerun()
 
-    # Tabla General con cálculo de Hits Totales
-    st.subheader("Roster de la Liga")
-    df_visual = st.session_state.jugadores.copy()
-    df_visual["Hits Totales"] = df_visual["H"] + df_visual["H2"] + df_visual["H3"] + df_visual["HR"]
-    st.dataframe(df_visual[["Nombre", "Equipo", "H", "H2", "H3", "HR", "Hits Totales"]], use_container_width=True)
+    st.subheader("Roster General")
+    df_v = st.session_state.jugadores.copy()
+    df_v["Hits Totales"] = df_v["H"] + df_v["H2"] + df_v["H3"] + df_v["HR"]
+    st.dataframe(df_v[["Nombre", "Equipo", "H", "H2", "H3", "HR", "Hits Totales"]], use_container_width=True)
 
-# ==========================================
-# SECCIÓN: CONSULTA POR EQUIPO
-# ==========================================
 elif menu == "📊 Consulta por Equipo":
     st.header("📊 Consulta por Equipo")
     lista_eq = st.session_state.equipos['Nombre'].tolist()
