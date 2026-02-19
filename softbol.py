@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-# --- 1. CONFIGURACIÓN DE CARPETA ---
+# --- 1. CONFIGURACIÓN DE CARPETAS Y DATOS ---
 CARPETA_DATOS = "datos_liga"
 if not os.path.exists(CARPETA_DATOS):
     os.makedirs(CARPETA_DATOS)
@@ -10,70 +10,92 @@ if not os.path.exists(CARPETA_DATOS):
 def ruta(archivo):
     return os.path.join(CARPETA_DATOS, archivo)
 
-# --- 2. INICIALIZAR CONTRASEÑA SI NO EXISTE ---
-if not os.path.exists(ruta("config.txt")):
-    with open(ruta("config.txt"), "w") as f:
-        f.write("softbol2026")
+# Inicializar bases de datos en la sesión
+if 'equipos' not in st.session_state:
+    st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
 
-# --- 3. LEER LA CLAVE ACTUAL ---
-with open(ruta("config.txt"), "r") as f:
-    pass_maestra = f.read().strip()
+if 'jugadores' not in st.session_state:
+    st.session_state.jugadores = pd.read_csv(ruta("data_jugadores.csv")) if os.path.exists(ruta("data_jugadores.csv")) else pd.DataFrame(columns=["Nombre", "Edad", "Equipo", "H", "HR"])
 
-# --- 4. CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Liga Softbol Pro 2026", layout="wide", page_icon="🥎")
+def guardar_datos():
+    st.session_state.equipos.to_csv(ruta("data_equipos.csv"), index=False)
+    st.session_state.jugadores.to_csv(ruta("data_jugadores.csv"), index=False)
 
-# --- 5. BARRA LATERAL (LOGIN MEJORADO) ---
-st.sidebar.title("🔐 Acceso de Liga")
-
-# Usamos un formulario para el login para que el "Enter" funcione siempre
+# --- 2. BARRA LATERAL (LOGIN) ---
+st.sidebar.title("⚾ LIGA SOFTBOL 2026")
 with st.sidebar.form("login_form"):
     pwd_input = st.text_input("Contraseña Admin:", type="password")
-    boton_login = st.form_submit_button("Entrar / Validar")
+    if st.form_submit_button("Entrar"): pass
 
-# Variable que define si eres admin o no
+pass_maestra = open(ruta("config.txt"), "r").read().strip() if os.path.exists(ruta("config.txt")) else "softbol2026"
 es_admin = (pwd_input == pass_maestra)
 
-if boton_login:
+menu = st.sidebar.radio("MENÚ:", ["🏠 Inicio", "👥 Registro de Equipos", "🏃 Registro de Jugadores", "📊 Estadísticas por Equipo"])
+
+# ==========================================
+# SECCIÓN: REGISTRO DE EQUIPOS
+# ==========================================
+if menu == "👥 Registro de Equipos":
+    st.header("👥 Gestión de Equipos")
     if es_admin:
-        st.sidebar.success("✅ ¡Acceso Correcto!")
+        with st.form("nuevo_equipo"):
+            n_eq = st.text_input("Nombre del Equipo (ej. Tomateros)")
+            if st.form_submit_button("Guardar Equipo"):
+                if n_eq and n_eq not in st.session_state.equipos['Nombre'].values:
+                    st.session_state.equipos = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_eq}])], ignore_index=True)
+                    guardar_datos()
+                    st.success(f"Equipo {n_eq} listo.")
+                else: st.error("Nombre inválido o ya existe.")
+    
+    st.subheader("Lista de Equipos")
+    st.dataframe(st.session_state.equipos, use_container_width=True)
+
+# ==========================================
+# SECCIÓN: REGISTRO DE JUGADORES (EDAD Y EQUIPO VINCULADO)
+# ==========================================
+elif menu == "🏃 Registro de Jugadores":
+    st.header("🏃 Alta de Jugadores")
+    
+    lista_equipos = st.session_state.equipos['Nombre'].tolist()
+    
+    if not lista_equipos:
+        st.warning("⚠️ Primero debes registrar al menos un equipo en la sección anterior.")
+    elif es_admin:
+        with st.form("nuevo_jugador"):
+            nom_j = st.text_input("Nombre del Jugador")
+            edad_j = st.number_input("Edad", min_value=5, max_value=90, step=1)
+            # Aquí es donde se direcciona al equipo correcto
+            eq_j = st.selectbox("Asignar a Equipo:", lista_equipos)
+            
+            if st.form_submit_button("Registrar Jugador"):
+                if nom_j:
+                    nuevo_j = pd.DataFrame([{"Nombre": nom_j, "Edad": edad_j, "Equipo": eq_j, "H": 0, "HR": 0}])
+                    st.session_state.jugadores = pd.concat([st.session_state.jugadores, nuevo_j], ignore_index=True)
+                    guardar_datos()
+                    st.success(f"¡{nom_j} ha sido asignado a {eq_j}!")
+                else: st.error("El nombre no puede estar vacío.")
+
+    st.subheader("Todos los Jugadores Registrados")
+    st.dataframe(st.session_state.jugadores, use_container_width=True)
+
+# ==========================================
+# SECCIÓN: ESTADÍSTICAS POR EQUIPO (DIRECCIONAMIENTO)
+# ==========================================
+elif menu == "📊 Estadísticas por Equipo":
+    st.header("📊 Consulta por Equipo")
+    lista_equipos = st.session_state.equipos['Nombre'].tolist()
+    
+    if not lista_equipos:
+        st.info("No hay datos para mostrar.")
     else:
-        st.sidebar.error("❌ Clave Incorrecta")
-
-st.sidebar.markdown("---")
-menu = st.sidebar.radio("IR A:", ["🏆 Standings", "🥖 Bateo", "🔥 Pitcheo", "📅 Rol", "⚙️ CONFIG"])
-
-# --- 6. ESTILO VISUAL ---
-st.markdown(f"""
-    <style>
-    .block-container {{ background-color: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 15px; }}
-    [data-testid="stSidebar"] input {{ color: black !important; }}
-    h1, h2, h3 {{ color: #b71c1c !important; text-align: center; }}
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 7. SECCIÓN DE PRUEBA (Para ver si funciona) ---
-if menu == "🥖 Bateo":
-    st.header("📊 Registro de Bateo")
-    if es_admin:
-        st.write("### 🟢 MODO ADMINISTRADOR ACTIVADO")
-        with st.form("registro_bateo"):
-            nombre = st.text_input("Nombre del Jugador")
-            if st.form_submit_button("Guardar Datos"):
-                st.success(f"Guardando a {nombre}...")
-    else:
-        st.info("Solo lectura. Ingresa la clave en la izquierda para editar.")
-
-# --- 8. SECCIÓN CONFIGURACIÓN ---
-elif menu == "⚙️ CONFIG":
-    st.header("⚙️ Ajustes de Seguridad")
-    if es_admin:
-        if st.checkbox("👁️ Ver Contraseña Actual"):
-            st.info(f"Tu clave es: **{pass_maestra}**")
+        filtro_eq = st.selectbox("Selecciona un equipo para ver su roster:", lista_equipos)
         
-        nueva_p = st.text_input("Nueva Contraseña", type="password")
-        if st.button("Cambiar Clave Ahora"):
-            with open(ruta("config.txt"), "w") as f:
-                f.write(nueva_p)
-            st.success("¡Clave cambiada! Úsala la próxima vez.")
-    else:
-        st.error("Debes validar la contraseña para ver esta sección.")
+        # Filtrado inteligente
+        roster = st.session_state.jugadores[st.session_state.jugadores['Equipo'] == filtro_eq]
+        
+        if roster.empty:
+            st.warning(f"No hay jugadores en el equipo {filtro_eq}.")
+        else:
+            st.subheader(f"Roster de {filtro_eq}")
+            st.write(f"Total de jugadores: {len(roster)}")
+            st.dataframe(roster[["Nombre", "Edad", "H", "HR"]], use_container_width=True)
