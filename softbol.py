@@ -40,7 +40,7 @@ def leer_csv(nombre, columnas):
         except: return pd.DataFrame(columns=columnas)
     return pd.DataFrame(columns=columnas)
 
-# Carga global de datos
+# Carga global
 st.session_state.jugadores = leer_csv("data_jugadores.csv", COLS_J)
 st.session_state.pitchers = leer_csv("data_pitchers.csv", COLS_P)
 st.session_state.equipos = leer_csv("data_equipos.csv", ["Nombre"])
@@ -66,16 +66,14 @@ with st.sidebar:
                     st.rerun()
                 else: st.error("Clave Incorrecta")
     else:
-        st.success(f"🔓 {st.session_state.rol}")
+        st.success(f"🔓 Sesión: {st.session_state.rol}")
         if st.session_state.eq_gestion: st.info(f"Equipo: {st.session_state.eq_gestion}")
         if st.button("Cerrar Sesión"):
             st.session_state.rol = "Invitado"; st.session_state.eq_gestion = None; st.rerun()
 
-# Menú dinámico
-opciones = ["🏠 Inicio", "🏆 LÍDERES", "📊 Standings", "📋 Rosters", "🔍 Buscador"]
-if st.session_state.rol == "Admin": opciones.append("🏃 Admin General")
-if st.session_state.rol == "Delegado": opciones.append("📋 Mi Roster (Delegado)")
-menu = st.sidebar.radio("IR A:", opciones)
+menu = st.sidebar.radio("IR A:", ["🏠 Inicio", "🏆 LÍDERES", "📊 Standings", "📋 Rosters", "🔍 Buscador", "🖼️ Galería"])
+if st.session_state.rol == "Admin": menu = st.sidebar.radio("ZONA ADMIN:", ["🏃 Admin General"])
+if st.session_state.rol == "Delegado": menu = st.sidebar.radio("ZONA DELEGADO:", ["📋 Mi Roster (Delegado)"])
 
 # ==========================================
 # 🏠 INICIO
@@ -84,19 +82,21 @@ if menu == "🏠 Inicio":
     st.markdown("<h1 style='text-align: center; color: #D32F2F;'>⚾ LIGA DE SOFTBOL DOMINICAL ⚾</h1>", unsafe_allow_html=True)
     if st.session_state.rol == "Admin":
         nuevos = st.session_state.jugadores[st.session_state.jugadores["VB"] == 0]
-        if not nuevos.empty:
-            st.error(f"📢 **ADMIN:** {len(nuevos)} jugadores nuevos sin estadísticas.")
+        if not nuevos.empty: st.error(f"📢 **ADMIN:** {len(nuevos)} jugadores nuevos sin stats.")
+    
     st.divider()
     fotos = sorted(os.listdir(FOTOS_DIR), reverse=True)
     if fotos:
-        cols = st.columns(3)
+        st.subheader("📸 Galería Reciente")
+        cols_gal = st.columns(3)
         for i, f in enumerate(fotos[:3]):
-            with cols[i%3]: st.image(os.path.join(FOTOS_DIR, f), use_container_width=True)
-    st.subheader("📅 Programación")
+            with cols_gal[i]: st.image(os.path.join(FOTOS_DIR, f), use_container_width=True)
+    
+    st.subheader("📅 Programación de Juegos")
     st.dataframe(st.session_state.calendario, use_container_width=True, hide_index=True)
 
 # ==========================================
-# 🏆 LÍDERES (COMPLETO)
+# 🏆 LÍDERES
 # ==========================================
 elif menu == "🏆 LÍDERES":
     t1, t2 = st.tabs(["🥖 Bateo", "🔥 Pitcheo"])
@@ -115,86 +115,128 @@ elif menu == "🏆 LÍDERES":
             dfp['EFE'] = ((dfp['CL'] * 7) / dfp['IP'].replace(0, 1)).fillna(0)
             cp1, cp2 = st.columns(2)
             cp1.subheader("🥇 EFE"); cp1.table(dfp[dfp['IP']>0].sort_values("EFE").head(10)[["Nombre", "EFE"]].style.format({"EFE": "{:.2f}"}))
-            cp2.subheader("🥇 Ganados"); cp2.table(dfp.sort_values("JG", ascending=False).head(10)[["Nombre", "JG"]])
+            cp2.subheader("🥇 JG"); cp2.table(dfp.sort_values("JG", ascending=False).head(10)[["Nombre", "JG"]])
         else: st.info("Sin datos.")
 
 # ==========================================
-# 🔍 BUSCADOR DE JUGADORES
+# 🔍 BUSCADOR
 # ==========================================
 elif menu == "🔍 Buscador":
-    st.header("🔍 Buscador de Estadísticas")
-    query = st.text_input("Escribe el nombre del jugador:")
-    if query:
-        res = st.session_state.jugadores[st.session_state.jugadores["Nombre"].str.contains(query, case=False)]
-        if not res.empty: st.dataframe(res, hide_index=True)
-        else: st.warning("No se encontró al jugador.")
+    st.header("🔍 Buscar Jugador")
+    q = st.text_input("Nombre:")
+    if q:
+        res = st.session_state.jugadores[st.session_state.jugadores["Nombre"].str.contains(q, case=False)]
+        st.dataframe(res, hide_index=True)
 
 # ==========================================
-# 📋 MI ROSTER (DELEGADO - PROTEGIDO)
+# 📋 ROSTERS (BATEO + PITCHEO)
+# ==========================================
+elif menu == "📋 Rosters":
+    if not st.session_state.equipos.empty:
+        eq_v = st.selectbox("Selecciona Equipo:", st.session_state.equipos["Nombre"].tolist())
+        st.subheader("🥖 Bateadores")
+        db = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq_v].copy()
+        if not db.empty:
+            db['AVG'] = ((db['H']+db['H2']+db['H3']+db['HR'])/db['VB'].replace(0,1)).fillna(0)
+            st.dataframe(db[["Nombre", "VB", "H", "H2", "H3", "HR", "AVG"]].style.format({"AVG": "{:.3f}"}), use_container_width=True, hide_index=True)
+        
+        st.subheader("🔥 Pitchers")
+        dp = st.session_state.pitchers[st.session_state.pitchers["Equipo"] == eq_v].copy()
+        if not dp.empty:
+            dp['EFE'] = ((dp['CL'] * 7) / dp['IP'].replace(0, 1)).fillna(0)
+            st.dataframe(dp[["Nombre", "JG", "JP", "IP", "CL", "EFE"]].style.format({"EFE": "{:.2f}"}), use_container_width=True, hide_index=True)
+    else: st.warning("No hay equipos.")
+
+# ==========================================
+# 🖼️ GALERÍA
+# ==========================================
+elif menu == "🖼️ Galería":
+    st.header("📸 Galería de la Liga")
+    if st.session_state.rol == "Admin":
+        subida = st.file_uploader("Subir Fotos:", accept_multiple_files=True)
+        if st.button("Guardar Fotos"):
+            for img in subida:
+                with open(os.path.join(FOTOS_DIR, img.name), "wb") as f: f.write(img.getbuffer())
+            st.rerun()
+    fotos = os.listdir(FOTOS_DIR)
+    cols = st.columns(4)
+    for i, f in enumerate(fotos):
+        with cols[i % 4]:
+            st.image(os.path.join(FOTOS_DIR, f), use_container_width=True)
+            if st.session_state.rol == "Admin" and st.button(f"Borrar {i}"):
+                os.remove(os.path.join(FOTOS_DIR, f)); st.rerun()
+
+# ==========================================
+# 📋 MI ROSTER (DELEGADO)
 # ==========================================
 elif menu == "📋 Mi Roster (Delegado)":
     mi_eq = st.session_state.eq_gestion
-    st.header(f"➕ Gestionar Roster: {mi_eq}")
+    st.header(f"➕ Registro: {mi_eq}")
     with st.form("alta_del"):
-        nom_n = st.text_input("Nombre del Jugador Nuevo")
-        if st.form_submit_button("✅ Registrar Jugador"):
-            if nom_n and nom_n not in st.session_state.jugadores["Nombre"].values:
+        nom_n = st.text_input("Nombre del Jugador")
+        if st.form_submit_button("✅ Registrar"):
+            if nom_n:
                 nueva = pd.DataFrame([[nom_n, mi_eq, 0, 0, 0, 0, 0]], columns=COLS_J)
                 pd.concat([st.session_state.jugadores, nueva], ignore_index=True).to_csv(path_archivo("data_jugadores.csv"), index=False)
-                st.success(f"{nom_n} añadido correctamente."); st.rerun()
-            else: st.error("Nombre inválido o ya existe en la liga.")
+                st.success("Añadido."); st.rerun()
 
 # ==========================================
-# 🏃 ADMIN GENERAL (ÚNICO QUE BORRA Y CREA CLAVES)
+# 🏃 ADMIN GENERAL
 # ==========================================
 elif menu == "🏃 Admin General":
-    if st.session_state.rol != "Admin": st.warning("Acceso Denegado")
+    if st.session_state.rol != "Admin": st.warning("Denegado")
     else:
         tab_e, tab_b, tab_p, tab_c, tab_k = st.tabs(["Equipos", "Bateo", "Pitcheo", "Calendario", "🔑 Claves"])
-        
         with tab_e:
-            n_e = st.text_input("Nuevo Equipo")
+            n_e = st.text_input("Nombre Equipo")
             if st.button("Registrar"):
                 pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_e}])], ignore_index=True).to_csv(path_archivo("data_equipos.csv"), index=False); st.rerun()
             e_borrar = st.selectbox("Borrar Equipo:", st.session_state.equipos["Nombre"].tolist())
-            if st.button("🗑️ Borrar Equipo"):
-                st.session_state.equipos = st.session_state.equipos[st.session_state.equipos["Nombre"] != e_borrar]
+            if st.button("🗑️ Borrar"):
+                st.session_state.equipos = st.session_state.equipos[st.session_state.equipos["Nombre"]!=e_borrar]
                 st.session_state.equipos.to_csv(path_archivo("data_equipos.csv"), index=False); st.rerun()
-
         with tab_b:
-            sel = st.selectbox("Editar/Borrar Jugador:", ["-- Nuevo --"] + sorted(st.session_state.jugadores["Nombre"].tolist()))
-            v_n, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = "", "", 0, 0, 0, 0, 0
-            if sel != "-- Nuevo --":
-                d = st.session_state.jugadores[st.session_state.jugadores["Nombre"] == sel].iloc[0]
-                v_n, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = d["Nombre"], d["Equipo"], int(d["VB"]), int(d["H"]), int(d["H2"]), int(d["H3"]), int(d["HR"])
+            sel = st.selectbox("Jugador:", ["-- Nuevo --"] + sorted(st.session_state.jugadores["Nombre"].tolist()))
             with st.form("f_b"):
-                nom = st.text_input("Nombre", value=v_n); eq = st.selectbox("Equipo", st.session_state.equipos["Nombre"].tolist())
+                nom = st.text_input("Nombre", value="" if sel=="-- Nuevo --" else sel)
+                eq = st.selectbox("Equipo", st.session_state.equipos["Nombre"].tolist())
                 c1, c2, c3, c4, c5 = st.columns(5)
-                vb, h, h2, h3, hr = c1.number_input("VB", value=v_vb), c2.number_input("H", value=v_h), c3.number_input("H2", value=v_h2), c4.number_input("H3", value=v_h3), c5.number_input("HR", value=v_hr)
-                if st.form_submit_button("💾 Guardar"):
+                vb, h, h2, h3, hr = c1.number_input("VB"), c2.number_input("H"), c3.number_input("H2"), c4.number_input("H3"), c5.number_input("HR")
+                if st.form_submit_button("Guardar"):
                     df = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel]
                     pd.concat([df, pd.DataFrame([[nom, eq, vb, h, h2, h3, hr]], columns=COLS_J)], ignore_index=True).to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
-            if sel != "-- Nuevo --" and st.button("🗑️ ELIMINAR JUGADOR"):
-                st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel].to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
-
+            if sel != "-- Nuevo --" and st.button("🗑️ Eliminar Jugador"):
+                st.session_state.jugadores[st.session_state.jugadores["Nombre"]!=sel].to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
+        with tab_p:
+            selp = st.selectbox("Pitcher:", ["-- Nuevo --"] + sorted(st.session_state.pitchers["Nombre"].tolist()))
+            with st.form("f_p"):
+                nomp = st.text_input("Nombre P", value="" if selp=="-- Nuevo --" else selp)
+                eqp = st.selectbox("Equipo ", st.session_state.equipos["Nombre"].tolist())
+                pc1, pc2, pc3, pc4 = st.columns(4)
+                jg, jp, ip, cl = pc1.number_input("JG"), pc2.number_input("JP"), pc3.number_input("IP"), pc4.number_input("CL")
+                if st.form_submit_button("Guardar P"):
+                    dfp = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != selp]
+                    pd.concat([dfp, pd.DataFrame([[nomp, eqp, jg, jp, ip, cl]], columns=COLS_P)], ignore_index=True).to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
+            if selp != "-- Nuevo --" and st.button("🗑️ Eliminar Pitcher"):
+                st.session_state.pitchers[st.session_state.pitchers["Nombre"]!=selp].to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
         with tab_k:
-            st.subheader("Generar Claves para Delegados")
             with st.form("f_k"):
-                eq_k = st.selectbox("Equipo:", st.session_state.equipos["Nombre"].tolist())
-                pass_k = st.text_input("Contraseña Nueva:")
+                eq_k = st.selectbox("Equipo clave:", st.session_state.equipos["Nombre"].tolist())
+                pass_k = st.text_input("Clave:")
                 if st.form_submit_button("🔒 Asignar"):
                     df_acc = st.session_state.accesos[st.session_state.accesos["Equipo"] != eq_k]
-                    nueva_k = pd.DataFrame([[eq_k, pass_k]], columns=COLS_ACC)
-                    pd.concat([df_acc, nueva_k], ignore_index=True).to_csv(path_archivo("data_accesos.csv"), index=False); st.rerun()
+                    pd.concat([df_acc, pd.DataFrame([[eq_k, pass_k]], columns=COLS_ACC)], ignore_index=True).to_csv(path_archivo("data_accesos.csv"), index=False); st.rerun()
             st.dataframe(st.session_state.accesos, hide_index=True)
+        with tab_c:
+            with st.form("f_cal"):
+                f, h, cp = st.text_input("Fecha"), st.text_input("Hora"), st.text_input("Campo")
+                loc, vis = st.selectbox("Local", st.session_state.equipos["Nombre"]), st.selectbox("Visitante", st.session_state.equipos["Nombre"])
+                sc = st.text_input("Score")
+                if st.form_submit_button("📅 Guardar Juego"):
+                    pd.concat([st.session_state.calendario, pd.DataFrame([[f, h, cp, loc, vis, sc]], columns=COLS_CAL)], ignore_index=True).to_csv(path_archivo("data_calendario.csv"), index=False); st.rerun()
 
-# Sección Standings y Rosters (Se mantiene igual que antes para no borrar nada)
+# --- STANDINGS ---
 elif menu == "📊 Standings":
     if not st.session_state.pitchers.empty:
         std = st.session_state.pitchers.groupby("Equipo")[["JG", "JP"]].sum().reset_index()
-        st.dataframe(std, use_container_width=True, hide_index=True)
-
-elif menu == "📋 Rosters":
-    if not st.session_state.equipos.empty:
-        eq_v = st.selectbox("Ver Equipo:", st.session_state.equipos["Nombre"].tolist())
-        st.dataframe(st.session_state.jugadores[st.session_state.jugadores["Equipo"]==eq_v], hide_index=True)
+        st.dataframe(std.sort_values("JG", ascending=False), use_container_width=True, hide_index=True)
