@@ -10,7 +10,7 @@ from fpdf import FPDF
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Liga Softbol Pro 2026", layout="wide", page_icon="🥎")
 
-# URL REAL DE TU PÁGINA (Pega la tuya aquí)
+# URL REAL DE TU PÁGINA (Cámbiala por la tuya)
 URL_MI_PAGINA = "https://liga-softbol-dominical-ing-benjamin-armenta.streamlit.app" 
 
 # Archivos de Datos
@@ -44,7 +44,7 @@ def guardar_todo():
 inicializar_configs()
 cargar_datos()
 
-# --- 2. ESTILO VISUAL ---
+# --- 2. ESTILO VISUAL (CON CORRECCIÓN DE LETRA NEGRA EN INPUTS) ---
 color_p = open("color_pri.txt", "r").read().strip()
 color_s = open("color_sec.txt", "r").read().strip()
 bg_img = open("bg_url.txt", "r").read().strip()
@@ -52,11 +52,17 @@ bg_img = open("bg_url.txt", "r").read().strip()
 st.markdown(f"""
     <style>
     .stApp {{ background-image: url("{bg_img}"); background-size: cover; background-attachment: fixed; }}
-    .block-container {{ background-color: rgba(255, 255, 255, 0.93); padding: 30px; border-radius: 15px; }}
+    .block-container {{ background-color: rgba(255, 255, 255, 0.93); padding: 30px; border-radius: 15px; box-shadow: 0px 4px 15px rgba(0,0,0,0.3); }}
+    
+    /* Barra lateral */
     [data-testid="stSidebar"] {{ background-color: {color_p}; }}
     [data-testid="stSidebar"] * {{ color: white !important; }}
-    h1, h2, h3 {{ color: {color_s} !important; text-align: center; }}
-    .stButton>button {{ background-color: {color_s}; color: white; border-radius: 8px; width: 100%; }}
+    
+    /* CORRECCIÓN: Letra negra al escribir contraseña/filtros en el sidebar */
+    [data-testid="stSidebar"] input {{ color: black !important; }}
+
+    h1, h2, h3 {{ color: {color_s} !important; text-align: center; font-family: 'Arial Black'; }}
+    .stButton>button {{ background-color: {color_s}; color: white; border-radius: 8px; font-weight: bold; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -79,39 +85,44 @@ def crear_pdf(df, titulo):
         pdf.ln()
     return pdf.output()
 
-# --- 4. BARRA LATERAL (SOLUCIÓN AL ERROR LÍNEA 90) ---
+# --- 4. BARRA LATERAL (CON CONTADOR CORREGIDO) ---
 st.sidebar.title("⚾ LIGA SOFTBOL 2026")
 pass_admin = open("config.txt", "r").read().strip()
 pwd = st.sidebar.text_input("Contraseña Admin:", type="password")
 es_admin = (pwd == pass_admin)
 
-# CONTADOR CORREGIDO (LÍNEA 90)
+# Contador de Visitas (Solución error línea 90)
 with st.sidebar:
     st.components.v1.html("""<div align="center"><img src="https://counter1.optistats.ovh" border="0"><p style="color:white; font-size:12px;">Visitas Totales</p></div>""", height=100)
 
 menu = st.sidebar.radio("IR A:", ["🏆 Standings", "📅 Calendario", "🥖 Bateo", "🔥 Pitcheo", "👤 Perfiles", "🔥 PLAYOFFS", "🌟 MVP", "📲 QR", "⚙️ CONFIG"])
 
-# --- 5. SECCIONES ---
+# --- 5. SECCIONES DEL SOFTWARE ---
 
 if menu == "🏆 Standings":
-    st.header("📊 Tabla de Posiciones")
+    st.header("📊 Tabla de Posiciones Temporada 2026")
     if not st.session_state.pitcheo.empty:
         stnd = st.session_state.pitcheo.groupby('Equipo').agg({'JG':'sum','JP':'sum','CF':'sum','CC':'sum'}).reset_index()
         stnd['JJ'] = stnd['JG'] + stnd['JP']
         stnd['PCT'] = (stnd['JG'] / stnd['JJ']).fillna(0).round(3)
         stnd['DIF'] = stnd['CF'] - stnd['CC']
         st.table(stnd.sort_values(by=['PCT', 'DIF'], ascending=False))
+    else: st.info("Sin datos registrados aún.")
 
 elif menu == "🥖 Bateo":
-    st.header("📊 Estadísticas de Bateo")
+    st.header("📊 Estadísticas de Bateo Individual")
     if not st.session_state.bateo.empty:
         df_b = st.session_state.bateo.copy()
         df_b['AVG'] = ((df_b['H'] + df_b['2B'] + df_b['3B'] + df_b['HR']) / df_b['VB']).fillna(0).round(3)
-        eq_sel = st.selectbox("🎯 Filtrar Equipo para WhatsApp:", ["TODOS"] + sorted(list(df_b['Equipo'].unique())))
+        
+        # Filtro de equipo para PDF
+        eq_sel = st.selectbox("🎯 Filtrar Equipo para Reporte WhatsApp:", ["TODOS"] + sorted(list(df_b['Equipo'].unique())))
         df_f = df_b if eq_sel == "TODOS" else df_b[df_b['Equipo'] == eq_sel]
         st.dataframe(df_f, use_container_width=True)
+        
         pdf_bateo = crear_pdf(df_f, f"Bateo - {eq_sel}")
         st.download_button(f"📄 Descargar PDF de {eq_sel} para WhatsApp", data=pdf_bateo, file_name=f"bateo_{eq_sel}.pdf", mime="application/pdf")
+    
     if es_admin:
         with st.expander("➕ Registrar Bateador"):
             with st.form("r_b"):
@@ -132,7 +143,7 @@ elif menu == "🔥 Pitcheo":
                 guardar_todo(); st.rerun()
 
 elif menu == "📅 Calendario":
-    st.header("🗓️ Rol de Juegos")
+    st.header("🗓️ Rol de Juegos Oficial")
     st.dataframe(st.session_state.juegos, use_container_width=True)
     if es_admin:
         with st.form("f_j"):
@@ -151,18 +162,19 @@ elif menu == "📲 QR":
         st.image(buf.getvalue(), width=300)
 
 elif menu == "⚙️ CONFIG":
-    st.header("⚙️ Ajustes")
+    st.header("⚙️ Ajustes de la Liga")
     if es_admin:
         c1, c2 = st.columns(2)
         with c1:
-            ncp = st.color_picker("Barra Lateral", color_p)
-            nbg = st.text_input("Link Fondo (URL)", bg_img)
+            ncp = st.color_picker("Color Barra Lateral", color_p)
+            nbg = st.text_input("Link Fondo Estadio (URL)", bg_img)
             if st.button("Guardar Diseño"):
                 with open("color_pri.txt", "w") as f: f.write(ncp)
                 with open("bg_url.txt", "w") as f: f.write(nbg)
                 st.rerun()
         with c2:
-            if st.checkbox("BORRAR TODO"):
+            st.subheader("🚨 Reiniciar Temporada")
+            if st.checkbox("BORRAR TODOS LOS DATOS"):
                 if st.button("🔥 RESET"):
                     for a in ARCHIVOS: 
                         if os.path.exists(a): os.remove(a)
