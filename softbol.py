@@ -14,7 +14,9 @@ def path_archivo(n): return os.path.join(DATOS_DIR, n)
 
 COLS_J = ["Nombre","Equipo","VB","H","H2","H3","HR"]
 COLS_P = ["Nombre","Equipo","JG","JP","IP","CL","K"]
-COLS_CAL, COLS_ACC = ["Fecha","Hora","Campo","Local","Visitante","Score"], ["Equipo","Password"]
+# Se agrega "Jornada" a las columnas del calendario
+COLS_CAL = ["Jornada","Fecha","Hora","Campo","Local","Visitante","Score"]
+COLS_ACC = ["Equipo","Password"]
 
 def leer_csv(n, cols):
     p = path_archivo(n)
@@ -23,7 +25,7 @@ def leer_csv(n, cols):
             df = pd.read_csv(p)
             df.columns = df.columns.str.strip()
             for c in cols:
-                if c not in df.columns: df[c] = "" if c in ["Score","Password"] else 0
+                if c not in df.columns: df[c] = "" if c in ["Score","Password","Jornada"] else 0
             return df[cols]
         except: return pd.DataFrame(columns=cols)
     return pd.DataFrame(columns=cols)
@@ -45,24 +47,18 @@ with st.sidebar:
             pwd_in = st.text_input("Clave:", type="password")
             if st.form_submit_button("Entrar"):
                 if pwd_in == "softbol2026": 
-                    st.session_state.rol = "Admin"
-                    st.rerun()
+                    st.session_state.rol = "Admin"; st.rerun()
                 elif pwd_in in st.session_state.accesos["Password"].values:
                     fila = st.session_state.accesos[st.session_state.accesos["Password"]==pwd_in].iloc[0]
-                    st.session_state.rol, st.session_state.eq_gestion = "Delegado", fila["Equipo"]
-                    st.rerun()
+                    st.session_state.rol, st.session_state.eq_gestion = "Delegado", fila["Equipo"]; st.rerun()
                 else: st.error("Error de Clave")
     else:
         st.success(f"🔓 Sesión: {st.session_state.rol}")
         if st.button("Cerrar Sesión"):
-            st.session_state.rol = "Invitado"
-            st.rerun()
+            st.session_state.rol = "Invitado"; st.rerun()
 
-# --- MENÚ UNIFICADO (CORRECCIÓN AQUÍ) ---
 opciones = ["🏠 Inicio", "🏆 LÍDERES", "📊 Standings", "📋 Rosters", "🖼️ Galería"]
-if st.session_state.rol == "Admin":
-    opciones.insert(0, "🏃 Admin General")  # El Admin ve la gestión y todo lo demás
-
+if st.session_state.rol == "Admin": opciones.insert(0, "🏃 Admin General")
 menu = st.sidebar.radio("IR A:", opciones)
 
 # --- 🏃 ADMIN GENERAL ---
@@ -93,8 +89,6 @@ if menu == "🏃 Admin General" and st.session_state.rol == "Admin":
             if st.form_submit_button("Guardar"):
                 df = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel]
                 pd.concat([df, pd.DataFrame([[nom,eq,vb,h,h2,h3,hr]], columns=COLS_J)], ignore_index=True).to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
-        if sel != "-- Nuevo --" and st.button("Eliminar Bateador"):
-            st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel].to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
 
     with t_p:
         st.subheader("Gestión de Pitchers")
@@ -110,27 +104,26 @@ if menu == "🏃 Admin General" and st.session_state.rol == "Admin":
             if st.form_submit_button("Guardar Pitcher"):
                 dfp = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != selp]
                 pd.concat([dfp, pd.DataFrame([[nomp,eqp,jg,jp,ip,cl,k]], columns=COLS_P)], ignore_index=True).to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
-        if selp != "-- Nuevo --" and st.button("Eliminar Pitcher"):
-            st.session_state.pitchers[st.session_state.pitchers["Nombre"] != selp].to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
 
     with t_c:
-        st.subheader("Gestión de Calendario")
-        # Editor rápido para el calendario
-        ed_cal = st.data_editor(st.session_state.calendario, num_rows="dynamic", use_container_width=True)
-        if st.button("Guardar Cambios Calendario"):
+        st.subheader("Gestión de Calendario (Jornadas)")
+        ed_cal = st.data_editor(st.session_state.calendario, num_rows="dynamic", use_container_width=True, key="editor_cal_jor")
+        if st.button("Guardar Calendario"):
             ed_cal.to_csv(path_archivo("data_calendario.csv"), index=False); st.rerun()
 
     with t_k:
-        st.subheader("Gestión de Claves Delegados")
+        st.subheader("Gestión de Claves")
         ed_acc = st.data_editor(st.session_state.accesos, num_rows="dynamic", use_container_width=True)
-        if st.button("Guardar Cambios Claves"):
+        if st.button("Guardar Claves"):
             ed_acc.to_csv(path_archivo("data_accesos.csv"), index=False); st.rerun()
 
 # --- SECCIONES PÚBLICAS ---
 elif menu == "🏠 Inicio":
     st.markdown("<h1 style='text-align:center;'>⚾ LIGA DOMINICAL 2026</h1>", unsafe_allow_html=True)
-    st.subheader("📅 Calendario Actual")
-    st.table(st.session_state.calendario)
+    st.subheader("📅 Calendario y Resultados")
+    # Mostrar el calendario ordenado por Jornada si es numérico
+    df_ver = st.session_state.calendario.copy()
+    st.dataframe(df_ver, use_container_width=True, hide_index=True)
 
 elif menu == "🏆 LÍDERES":
     t1, t2 = st.tabs(["🥖 Bateo", "🔥 Pitcheo"])
