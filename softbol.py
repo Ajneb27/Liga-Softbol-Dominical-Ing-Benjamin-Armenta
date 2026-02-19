@@ -50,29 +50,57 @@ es_admin = st.session_state.autenticado
 menu = st.sidebar.radio("MENÚ:", ["🏠 Inicio", "🏆 TOP 10 LÍDERES", "📋 Rosters por Equipo", "🏃 Estadísticas (Admin)", "👥 Equipos"])
 
 # ==========================================
-# SECCIÓN: TOP 10 LÍDERES
+# SECCIÓN: TOP 10 LÍDERES (RESTAURADA Y FIJA)
 # ==========================================
 if menu == "🏆 TOP 10 LÍDERES":
-    tab_b, tab_p = st.tabs(["🥖 Bateo", "🔥 Pitcheo"])
+    tab_b, tab_p = st.tabs(["🥖 Líderes de Bateo", "🔥 Líderes de Pitcheo"])
+    
     with tab_b:
+        st.header("🏆 Cuadro de Honor: Bateo")
         df_l = st.session_state.jugadores.copy()
         if not df_l.empty:
-            hits = df_l['H'] + df_l['H2'] + df_l['H3'] + df_l['HR']
-            df_l['AVG'] = (hits / df_l['VB'].replace(0, 1)).fillna(0)
+            # Cálculo de AVG (Sencillos + Dobles + Triples + HR) / VB
+            df_l['Hits_Totales'] = df_l['H'] + df_l['H2'] + df_l['H3'] + df_l['HR']
+            df_l['AVG'] = (df_l['Hits_Totales'] / df_l['VB'].replace(0, 1)).fillna(0)
+            
+            # FILA 1: AVG y HR
             c1, c2 = st.columns(2)
-            c1.subheader("🥇 AVG")
-            c1.table(df_l.sort_values("AVG", ascending=False).head(10)[["Nombre", "AVG"]].style.format({"AVG": "{:.3f}"}))
-            c2.subheader("🥇 HR")
-            c2.table(df_l.sort_values("HR", ascending=False).head(10)[["Nombre", "HR"]])
+            with c1:
+                st.subheader("🥇 Average (AVG)")
+                st.table(df_l.sort_values("AVG", ascending=False).head(10)[["Nombre", "AVG"]].style.format({"AVG": "{:.3f}"}))
+            with c2:
+                st.subheader("🥇 Jonrones (HR)")
+                st.table(df_l.sort_values("HR", ascending=False).head(10)[["Nombre", "HR"]])
+
+            # FILA 2: Hits Totales y Triples
+            c3, c4 = st.columns(2)
+            with c3:
+                st.subheader("🥇 Hits Totales (H+)")
+                st.table(df_l.sort_values("Hits_Totales", ascending=False).head(10)[["Nombre", "Hits_Totales"]])
+            with c4:
+                st.subheader("🥇 Triples (H3)")
+                st.table(df_l.sort_values("H3", ascending=False).head(10)[["Nombre", "H3"]])
+
+            # FILA 3: Dobles
+            st.subheader("🥇 Dobles (H2)")
+            st.table(df_l.sort_values("H2", ascending=False).head(10)[["Nombre", "H2"]])
+        else:
+            st.info("No hay datos de bateo registrados.")
+
     with tab_p:
+        st.header("🏆 Cuadro de Honor: Pitcheo")
         df_p = st.session_state.pitchers.copy()
         if not df_p.empty:
             df_p['EFE'] = ((df_p['CL'] * 7) / df_p['IP'].replace(0, 1)).fillna(0)
             cp1, cp2 = st.columns(2)
-            cp1.subheader("🥇 Efectividad")
-            cp1.table(df_p[df_p['IP'] > 0].sort_values("EFE", ascending=True).head(10)[["Nombre", "EFE"]].style.format({"EFE": "{:.2f}"}))
-            cp2.subheader("🥇 Ganados (JG)")
-            cp2.table(df_p.sort_values("JG", ascending=False).head(10)[["Nombre", "JG"]])
+            with cp1:
+                st.subheader("🥇 Efectividad (EFE)")
+                st.table(df_p[df_p['IP'] > 0].sort_values("EFE", ascending=True).head(10)[["Nombre", "EFE"]].style.format({"EFE": "{:.2f}"}))
+            with cp2:
+                st.subheader("🥇 Ganados (JG)")
+                st.table(df_p.sort_values("JG", ascending=False).head(10)[["Nombre", "JG"]])
+        else:
+            st.info("No hay datos de pitcheo registrados.")
 
 # ==========================================
 # SECCIÓN: ESTADÍSTICAS ADMIN
@@ -114,8 +142,8 @@ elif menu == "🏃 Estadísticas (Admin)":
                 nom_p = st.text_input("Nombre Pitcher", value=vp_n)
                 eq_p = st.selectbox("Equipo ", st.session_state.equipos["Nombre"].tolist() if not st.session_state.equipos.empty else ["N/A"])
                 c1, c2, c3, c4 = st.columns(4)
-                jg = c1.number_input("JG (Ganados)", value=vp_jg); jp = c2.number_input("JP (Perdidos)", value=vp_jp)
-                ip = c3.number_input("IP (Innings)", value=vp_ip); cl = c4.number_input("CL (Carreras)", value=vp_cl)
+                jg = c1.number_input("JG", value=vp_jg); jp = c2.number_input("JP", value=vp_jp)
+                ip = c3.number_input("IP", value=vp_ip); cl = c4.number_input("CL", value=vp_cl)
                 if st.form_submit_button("🔥 Guardar Pitcher"):
                     st.session_state.pitchers = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != sel_p]
                     nueva_p = pd.DataFrame([{"Nombre": nom_p, "Equipo": eq_p, "JG": jg, "JP": jp, "IP": ip, "CL": cl}])
@@ -130,20 +158,17 @@ elif menu == "📋 Rosters por Equipo":
     st.header("📋 Roster Detallado")
     if not st.session_state.equipos.empty:
         eq_sel = st.selectbox("Selecciona Equipo:", st.session_state.equipos["Nombre"].tolist())
-        
         st.subheader("🥖 Bateadores")
         df_r = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq_sel].copy()
         if not df_r.empty:
             df_r['AVG'] = ((df_r['H']+df_r['H2']+df_r['H3']+df_r['HR'])/df_r['VB'].replace(0,1)).fillna(0)
             st.dataframe(df_r.style.format({"AVG": "{:.3f}"}), use_container_width=True)
-        else: st.info("No hay bateadores registrados.")
-
-        st.subheader("🔥 Pitchers (Récord JG-JP)")
+        
+        st.subheader("🔥 Pitchers (Récord)")
         df_rp = st.session_state.pitchers[st.session_state.pitchers["Equipo"] == eq_sel].copy()
         if not df_rp.empty:
             df_rp['EFE'] = ((df_rp['CL'] * 7) / df_rp['IP'].replace(0, 1)).fillna(0)
             st.dataframe(df_rp[["Nombre", "JG", "JP", "IP", "CL", "EFE"]].style.format({"EFE": "{:.2f}"}), use_container_width=True)
-        else: st.info("No hay pitchers registrados.")
     else: st.warning("Crea equipos primero.")
 
 elif menu == "👥 Equipos":
@@ -158,4 +183,4 @@ elif menu == "👥 Equipos":
 
 elif menu == "🏠 Inicio":
     st.title("⚾ Liga de Softbol 2026")
-    st.write("Gestiona y consulta las estadísticas de bateo y pitcheo de la temporada.")
+    st.write("Consulta y gestiona las estadísticas oficiales.")
