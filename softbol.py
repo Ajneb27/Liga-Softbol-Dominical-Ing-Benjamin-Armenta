@@ -4,7 +4,7 @@ import os
 
 # --- 1. CONFIGURACIÓN DE LA APP (PARA MÓVIL) ---
 st.set_page_config(
-    page_title="LIGA SOFTBOL 2026",
+    page_title="LIGA SOFTBOL DOMINICAL ING. BENJAMIN ARMENTA",
     page_icon="⚾",
     layout="wide",
     initial_sidebar_state="collapsed" # Se oculta en móviles para mejor vista
@@ -203,3 +203,4 @@ elif menu == "👥 Equipos":
             pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_e}])], ignore_index=True).to_csv(ruta("data_equipos.csv"), index=False)
             st.rerun()
     st.table(st.session_state.equipos)
+
