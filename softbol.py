@@ -25,31 +25,39 @@ if 'jugadores' not in st.session_state: st.session_state.jugadores = cargar_juga
 if 'equipos' not in st.session_state:
     st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
 
-# --- 2. SEGURIDAD (LOGIN) ---
+# --- 2. SEGURIDAD (LOGIN / LOGOUT) ---
 st.sidebar.title("⚾ LIGA SOFTBOL 2026")
-with st.sidebar.form("login"):
-    pwd = st.text_input("Contraseña Admin:", type="password")
-    submit_login = st.form_submit_button("Validar Acceso")
 
-# Tu clave de administrador
-CLAVE_ADMIN = "softbol2026" 
-es_admin = (pwd == CLAVE_ADMIN)
+# Usamos session_state para mantener el estado del login
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
 
-if es_admin:
-    st.sidebar.success("🔓 MODO ADMINISTRADOR")
+# Formulario de Login si no está autenticado
+if not st.session_state.autenticado:
+    with st.sidebar.form("login"):
+        pwd = st.text_input("Contraseña Admin:", type="password")
+        if st.form_submit_button("Validar Acceso"):
+            if pwd == "softbol2026":
+                st.session_state.autenticado = True
+                st.rerun()
+            else:
+                st.error("Clave incorrecta")
 else:
-    st.sidebar.info("🔒 MODO LECTURA")
+    st.sidebar.success("🔓 MODO ADMINISTRADOR")
+    if st.sidebar.button("Cerrar Sesión 🔒"):
+        st.session_state.autenticado = False
+        st.rerun()
 
+es_admin = st.session_state.autenticado
 menu = st.sidebar.radio("MENÚ:", ["🏆 TOP 10 LÍDERES", "🏃 Bateo", "👥 Equipos"])
 
 # ==========================================
-# SECCIÓN: TOP 10 LÍDERES (PÚBLICO)
+# SECCIÓN: TOP 10 LÍDERES
 # ==========================================
 if menu == "🏆 TOP 10 LÍDERES":
     st.header("🏆 Líderes de la Liga (Milésimas)")
     df_l = st.session_state.jugadores.copy()
     if not df_l.empty:
-        # Cálculo de AVG automático
         hits = df_l['H'] + df_l['H2'] + df_l['H3'] + df_l['HR']
         df_l['AVG'] = (hits / df_l['VB'].replace(0, 1)).fillna(0)
         
@@ -68,12 +76,11 @@ if menu == "🏆 TOP 10 LÍDERES":
     else: st.info("No hay datos cargados.")
 
 # ==========================================
-# SECCIÓN: BATEO (EDICIÓN RESTRINGIDA)
+# SECCIÓN: BATEO
 # ==========================================
 elif menu == "🏃 Bateo":
     st.header("🏃 Estadísticas de Bateo")
     
-    # SOLO EL ADMIN PUEDE VER EL FORMULARIO
     if es_admin:
         with st.expander("🛠️ PANEL DE EDICIÓN Y REGISTRO", expanded=True):
             lista_nombres = ["-- Nuevo Registro --"] + sorted(st.session_state.jugadores["Nombre"].tolist())
@@ -81,8 +88,11 @@ elif menu == "🏃 Bateo":
             
             v_nom, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = "", "", 1, 0, 0, 0, 0
             if seleccion != "-- Nuevo Registro --":
-                fila = st.session_state.jugadores[st.session_state.jugadores["Nombre"] == seleccion].iloc[0]
-                v_nom, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = fila["Nombre"], fila["Equipo"], int(fila["VB"]), int(fila["H"]), int(fila["H2"]), int(fila["H3"]), int(fila["HR"])
+                # Usar .iloc[0] para obtener la serie de la primera coincidencia
+                datos_f = st.session_state.jugadores[st.session_state.jugadores["Nombre"] == seleccion]
+                if not datos_f.empty:
+                    fila = datos_f.iloc[0]
+                    v_nom, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = fila["Nombre"], fila["Equipo"], int(fila["VB"]), int(fila["H"]), int(fila["H2"]), int(fila["H3"]), int(fila["HR"])
 
             with st.form("form_bateo"):
                 nom = st.text_input("Nombre Completo", value=v_nom)
@@ -95,7 +105,6 @@ elif menu == "🏃 Bateo":
                 if st.form_submit_button("💾 ACTUALIZAR / GUARDAR"):
                     if not nom: st.error("El nombre es necesario.")
                     else:
-                        # Si editamos, quitamos el registro previo para no duplicar
                         if seleccion != "-- Nuevo Registro --":
                             st.session_state.jugadores = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != seleccion]
                         
@@ -112,13 +121,13 @@ elif menu == "🏃 Bateo":
                     st.session_state.jugadores.to_csv(ruta("data_jugadores.csv"), index=False)
                     st.rerun()
     else:
-        st.warning("⚠️ Acceso restringido. Solo el administrador puede editar o borrar jugadores.")
+        st.warning("⚠️ Modo lectura. El administrador debe iniciar sesión para editar.")
 
     st.subheader("📋 Tabla General")
     st.dataframe(st.session_state.jugadores, use_container_width=True)
 
 # ==========================================
-# SECCIÓN: EQUIPOS (RESTRINGIDA)
+# SECCIÓN: EQUIPOS
 # ==========================================
 elif menu == "👥 Equipos":
     st.header("👥 Equipos de la Liga")
@@ -126,8 +135,8 @@ elif menu == "👥 Equipos":
         with st.form("nuevo_e"):
             n_e = st.text_input("Nombre del Nuevo Equipo")
             if st.form_submit_button("Registrar Equipo"):
-                st.session_state.equipos = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_e}])], ignore_index=True)
-                st.session_state.equipos.to_csv(ruta("data_equipos.csv"), index=False)
-                st.rerun()
-    
+                if n_e:
+                    st.session_state.equipos = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_e}])], ignore_index=True)
+                    st.session_state.equipos.to_csv(ruta("data_equipos.csv"), index=False)
+                    st.rerun()
     st.table(st.session_state.equipos)
