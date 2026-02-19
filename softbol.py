@@ -25,8 +25,21 @@ if 'jugadores' not in st.session_state: st.session_state.jugadores = cargar_juga
 if 'equipos' not in st.session_state:
     st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
 
-# --- 2. INTERFAZ ---
+# --- 2. SEGURIDAD (LOGIN) ---
 st.sidebar.title("⚾ LIGA SOFTBOL 2026")
+with st.sidebar.form("login"):
+    pwd = st.text_input("Contraseña Admin:", type="password")
+    if st.form_submit_button("Validar Acceso"): pass
+
+# Define aquí tu contraseña
+CLAVE_ADMIN = "softbol2026" 
+es_admin = (pwd == CLAVE_ADMIN)
+
+if es_admin:
+    st.sidebar.success("🔓 Modo Editor Activo")
+else:
+    st.sidebar.info("🔒 Modo Lectura (Solo Ver)")
+
 menu = st.sidebar.radio("MENÚ:", ["🏆 TOP 10 LÍDERES", "🏃 Bateo", "👥 Equipos"])
 
 # ==========================================
@@ -36,7 +49,6 @@ if menu == "🏆 TOP 10 LÍDERES":
     st.header("🏆 Líderes (Milésimas)")
     df_l = st.session_state.jugadores.copy()
     if not df_l.empty:
-        # Cálculo automático de AVG en tiempo real
         hits = df_l['H'] + df_l['H2'] + df_l['H3'] + df_l['HR']
         df_l['AVG'] = (hits / df_l['VB'].replace(0, 1)).fillna(0)
         
@@ -60,72 +72,60 @@ if menu == "🏆 TOP 10 LÍDERES":
 elif menu == "🏃 Bateo":
     st.header("🏃 Gestión de Jugadores")
     
-    # Selector de Jugador para Editar
-    lista_nombres = ["-- Nuevo Registro --"] + sorted(st.session_state.jugadores["Nombre"].tolist())
-    seleccion = st.selectbox("Selecciona un jugador para EDITAR o deja en 'Nuevo':", lista_nombres)
-    
-    # Valores iniciales
-    v_nom, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = "", "", 1, 0, 0, 0, 0
-    
-    if seleccion != "-- Nuevo Registro --":
-        # Extraemos los datos del jugador seleccionado
-        fila = st.session_state.jugadores[st.session_state.jugadores["Nombre"] == seleccion].iloc[0]
-        v_nom, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = fila["Nombre"], fila["Equipo"], int(fila["VB"]), int(fila["H"]), int(fila["H2"]), int(fila["H3"]), int(fila["HR"])
-
-    with st.form("form_bateo", clear_on_submit=True):
-        st.subheader("Datos del Jugador")
-        nom = st.text_input("Nombre Completo", value=v_nom)
-        eq = st.selectbox("Equipo", st.session_state.equipos["Nombre"].tolist() if not st.session_state.equipos.empty else ["N/A"], index=0)
+    if es_admin:
+        lista_nombres = ["-- Nuevo Registro --"] + sorted(st.session_state.jugadores["Nombre"].tolist())
+        seleccion = st.selectbox("Selecciona un jugador para EDITAR o deja en 'Nuevo':", lista_nombres)
         
-        col1, col2, col3, col4, col5 = st.columns(5)
-        vb = col1.number_input("VB", min_value=1, value=v_vb)
-        h = col2.number_input("H1", value=v_h)
-        h2 = col3.number_input("H2", value=v_h2)
-        h3 = col4.number_input("H3", value=v_h3)
-        hr = col5.number_input("HR", value=v_hr)
-        
-        submitted = st.form_submit_button("💾 GUARDAR CAMBIOS")
-        
-        if submitted:
-            if not nom:
-                st.error("El nombre es obligatorio.")
-            else:
-                # 1. Si estamos editando, eliminamos la versión vieja primero
-                if seleccion != "-- Nuevo Registro --":
-                    st.session_state.jugadores = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != seleccion]
-                
-                # 2. Creamos la nueva fila
-                nueva_fila = pd.DataFrame([{"Nombre": nom, "Edad": 0, "Equipo": eq, "VB": vb, "H": h, "H2": h2, "H3": h3, "HR": hr}])
-                
-                # 3. Concatenamos y guardamos
-                st.session_state.jugadores = pd.concat([st.session_state.jugadores, nueva_fila], ignore_index=True)
-                st.session_state.jugadores.to_csv(ruta("data_jugadores.csv"), index=False)
-                
-                st.success(f"¡Datos de {nom} actualizados correctamente!")
-                st.rerun()
+        v_nom, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = "", "", 1, 0, 0, 0, 0
+        if seleccion != "-- Nuevo Registro --":
+            fila = st.session_state.jugadores[st.session_state.jugadores["Nombre"] == seleccion].iloc[0]
+            v_nom, v_eq, v_vb, v_h, v_h2, v_h3, v_hr = fila["Nombre"], fila["Equipo"], int(fila["VB"]), int(fila["H"]), int(fila["H2"]), int(fila["H3"]), int(fila["HR"])
 
-    # Opción de Borrado
-    if not st.session_state.jugadores.empty:
-        with st.expander("🗑️ Zona de Peligro: Borrar Jugador"):
-            borrar_sel = st.selectbox("Selecciona jugador a ELIMINAR permanentemente:", st.session_state.jugadores["Nombre"].tolist())
-            if st.button("Confirmar Eliminación ❌"):
-                st.session_state.jugadores = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != borrar_sel]
-                st.session_state.jugadores.to_csv(ruta("data_jugadores.csv"), index=False)
-                st.warning(f"Jugador {borrar_sel} eliminado."); st.rerun()
+        with st.form("form_bateo"):
+            nom = st.text_input("Nombre Completo", value=v_nom)
+            lista_eq = st.session_state.equipos["Nombre"].tolist() if not st.session_state.equipos.empty else ["N/A"]
+            eq = st.selectbox("Equipo", lista_eq)
+            
+            col1, col2, col3, col4, col5 = st.columns(5)
+            vb = col1.number_input("VB", min_value=1, value=v_vb)
+            h = col2.number_input("H1", value=v_h)
+            h2 = col3.number_input("H2", value=v_h2)
+            h3 = col4.number_input("H3", value=v_h3)
+            hr = col5.number_input("HR", value=v_hr)
+            
+            if st.form_submit_button("💾 GUARDAR CAMBIOS"):
+                if not nom: st.error("Falta el nombre.")
+                else:
+                    if seleccion != "-- Nuevo Registro --":
+                        st.session_state.jugadores = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != seleccion]
+                    
+                    nueva_fila = pd.DataFrame([{"Nombre": nom, "Edad": 0, "Equipo": eq, "VB": vb, "H": h, "H2": h2, "H3": h3, "HR": hr}])
+                    st.session_state.jugadores = pd.concat([st.session_state.jugadores, nueva_fila], ignore_index=True)
+                    st.session_state.jugadores.to_csv(ruta("data_jugadores.csv"), index=False)
+                    st.success(f"¡Actualizado!"); st.rerun()
 
-    st.subheader("📋 Tabla de Posiciones de Bateo")
+        if not st.session_state.jugadores.empty:
+            with st.expander("🗑️ Zona de Peligro: Borrar Jugador"):
+                borrar_sel = st.selectbox("Borrar permanentemente:", st.session_state.jugadores["Nombre"].tolist())
+                if st.button("Confirmar Eliminación ❌"):
+                    st.session_state.jugadores = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != borrar_sel]
+                    st.session_state.jugadores.to_csv(ruta("data_jugadores.csv"), index=False)
+                    st.rerun()
+    else:
+        st.warning("Debes ingresar la contraseña en el menú lateral para editar registros.")
+
+    st.subheader("📋 Tabla General")
     st.dataframe(st.session_state.jugadores, use_container_width=True)
 
 # ==========================================
 # SECCIÓN: EQUIPOS
 # ==========================================
 elif menu == "👥 Equipos":
-    st.header("👥 Gestión de Equipos")
-    n_e = st.text_input("Nombre del Equipo")
-    if st.button("Registrar Equipo"):
-        if n_e:
-            nuevo_e = pd.DataFrame([{"Nombre": n_e}])
-            st.session_state.equipos = pd.concat([st.session_state.equipos, nuevo_e], ignore_index=True)
+    st.header("👥 Equipos")
+    if es_admin:
+        n_e = st.text_input("Nombre del Equipo")
+        if st.button("Registrar Equipo"):
+            st.session_state.equipos = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_e}])], ignore_index=True)
             st.session_state.equipos.to_csv(ruta("data_equipos.csv"), index=False)
             st.rerun()
     st.table(st.session_state.equipos)
