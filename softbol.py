@@ -23,10 +23,10 @@ def cargar_datos(archivo, columnas):
         return df[columnas]
     return pd.DataFrame(columns=columnas)
 
-if 'jugadores' not in st.session_state: st.session_state.jugadores = cargar_datos("data_jugadores.csv", COLS_J)
-if 'pitchers' not in st.session_state: st.session_state.pitchers = cargar_datos("data_pitchers.csv", COLS_P)
-if 'equipos' not in st.session_state:
-    st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
+# Carga constante para asegurar que siempre haya datos frescos
+st.session_state.jugadores = cargar_datos("data_jugadores.csv", COLS_J)
+st.session_state.pitchers = cargar_datos("data_pitchers.csv", COLS_P)
+st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
 
 # --- 2. SEGURIDAD ---
 st.sidebar.title("⚾ LIGA SOFTBOL 2026")
@@ -49,52 +49,64 @@ else:
 menu = st.sidebar.radio("MENÚ:", ["🏠 Inicio", "🏆 TOP 10 LÍDERES", "📋 Rosters por Equipo", "🏃 Estadísticas (Admin)", "👥 Equipos"])
 
 # ==========================================
-# SECCIÓN: TOP 10 LÍDERES (CORREGIDA)
+# SECCIÓN: ROSTERS POR EQUIPO (CORREGIDA)
 # ==========================================
-if menu == "🏆 TOP 10 LÍDERES":
-    t_bateo, t_picheo = st.tabs(["🥖 Líderes de Bateo", "🔥 Líderes de Pitcheo"])
+if menu == "📋 Rosters por Equipo":
+    st.header("📋 Roster Detallado por Equipo")
     
-    with t_bateo:
-        st.header("🏆 Cuadro de Honor: Bateo")
+    if not st.session_state.equipos.empty:
+        # Añadimos una key para forzar la actualización al cambiar
+        eq_s = st.selectbox("Selecciona un Equipo para ver su Roster:", 
+                            st.session_state.equipos["Nombre"].tolist(),
+                            key="selector_roster")
+        
+        # FILTRADO DE BATEADORES
+        df_r = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq_s].copy()
+        
+        st.subheader(f"🥖 Bateadores de {eq_s}")
+        if not df_r.empty:
+            # Cálculo de AVG en milésimas
+            df_r['H_T'] = df_r['H'] + df_r['H2'] + df_r['H3'] + df_r['HR']
+            df_r['AVG'] = (df_r['H_T'] / df_r['VB'].replace(0, 1)).fillna(0)
+            
+            # Mostramos columnas clave
+            st.dataframe(df_r[["Nombre", "VB", "H", "H2", "H3", "HR", "AVG"]].style.format({"AVG": "{:.3f}"}), 
+                         use_container_width=True)
+        else:
+            st.info(f"No hay bateadores registrados en {eq_s}.")
+
+        # FILTRADO DE PITCHERS
+        st.subheader(f"🔥 Pitchers de {eq_s}")
+        df_rp = st.session_state.pitchers[st.session_state.pitchers["Equipo"] == eq_s].copy()
+        if not df_rp.empty:
+            df_rp['EFE'] = ((df_rp['CL'] * 7) / df_rp['IP'].replace(0, 1)).fillna(0)
+            st.dataframe(df_rp[["Nombre", "JG", "JP", "IP", "CL", "EFE"]].style.format({"EFE": "{:.2f}"}), 
+                         use_container_width=True)
+        else:
+            st.info(f"No hay pitchers registrados en {eq_s}.")
+    else:
+        st.warning("No hay equipos registrados todavía.")
+
+# ==========================================
+# SECCIÓN: TOP 10 LÍDERES
+# ==========================================
+elif menu == "🏆 TOP 10 LÍDERES":
+    t_b, t_p = st.tabs(["🥖 Bateo", "🔥 Pitcheo"])
+    with t_b:
         df_b = st.session_state.jugadores.copy()
         if not df_b.empty:
-            # CÁLCULO CRUCIAL: Sumamos todos los hits para el liderato de HITS
-            df_b['H_TOTALES'] = df_b['H'] + df_b['H2'] + df_b['H3'] + df_b['HR']
-            df_b['AVG'] = (df_b['H_TOTALES'] / df_b['VB'].replace(0, 1)).fillna(0)
-            
+            df_b['HT'] = df_b['H'] + df_b['H2'] + df_b['H3'] + df_b['HR']
+            df_b['AVG'] = (df_b['HT'] / df_b['VB'].replace(0, 1)).fillna(0)
             c1, c2 = st.columns(2)
-            with c1:
-                st.subheader("🥇 Average (AVG)")
-                st.table(df_b.sort_values("AVG", ascending=False).head(10)[["Nombre", "AVG"]].style.format({"AVG": "{:.3f}"}))
-                st.subheader("🥇 Hits Totales (H+)")
-                st.table(df_b.sort_values("H_TOTALES", ascending=False).head(10)[["Nombre", "H_TOTALES"]])
-            with c2:
-                st.subheader("🥇 Jonrones (HR)")
-                st.table(df_b.sort_values("HR", ascending=False).head(10)[["Nombre", "HR"]])
-                st.subheader("🥇 Dobles (H2)")
-                st.table(df_b.sort_values("H2", ascending=False).head(10)[["Nombre", "H2"]])
-            
-            st.subheader("🥇 Triples (H3)")
-            st.table(df_b.sort_values("H3", ascending=False).head(10)[["Nombre", "H3"]])
-        else: st.info("Sin datos de bateo.")
-
-    with t_picheo:
-        st.header("🏆 Cuadro de Honor: Pitcheo")
+            c1.table(df_b.sort_values("AVG", ascending=False).head(10)[["Nombre", "AVG"]].style.format({"AVG": "{:.3f}"}))
+            c2.table(df_b.sort_values("HR", ascending=False).head(10)[["Nombre", "HR"]])
+    with t_p:
         df_p = st.session_state.pitchers.copy()
         if not df_p.empty:
             df_p['EFE'] = ((df_p['CL'] * 7) / df_p['IP'].replace(0, 1)).fillna(0)
-            cp1, cp2 = st.columns(2)
-            with cp1:
-                st.subheader("🥇 Efectividad (EFE)")
-                st.table(df_p[df_p['IP'] > 0].sort_values("EFE", ascending=True).head(10)[["Nombre", "EFE"]].style.format({"EFE": "{:.2f}"}))
-                st.subheader("🥇 Ganados (JG)")
-                st.table(df_p.sort_values("JG", ascending=False).head(10)[["Nombre", "JG"]])
-            with cp2:
-                st.subheader("🥇 Perdidos (JP)")
-                st.table(df_p.sort_values("JP", ascending=False).head(10)[["Nombre", "JP"]])
-                st.subheader("🥇 Innings (IP)")
-                st.table(df_p.sort_values("IP", ascending=False).head(10)[["Nombre", "IP"]])
-        else: st.info("Sin datos de pitcheo.")
+            c1, c2 = st.columns(2)
+            c1.table(df_p[df_p['IP'] > 0].sort_values("EFE", ascending=True).head(10)[["Nombre", "EFE"]].style.format({"EFE": "{:.2f}"}))
+            c2.table(df_p.sort_values("JG", ascending=False).head(10)[["Nombre", "JG"]])
 
 # ==========================================
 # SECCIÓN: ESTADÍSTICAS ADMIN
@@ -120,8 +132,7 @@ elif menu == "🏃 Estadísticas (Admin)":
                 if st.form_submit_button("💾 Guardar"):
                     st.session_state.jugadores = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel_j]
                     nueva = pd.DataFrame([{"Nombre": nom, "Equipo": eq, "VB": vb, "H": h1, "H2": h2, "H3": h3, "HR": hr}])
-                    st.session_state.jugadores = pd.concat([st.session_state.jugadores, nueva], ignore_index=True)
-                    st.session_state.jugadores.to_csv(ruta("data_jugadores.csv"), index=False)
+                    pd.concat([st.session_state.jugadores, nueva], ignore_index=True).to_csv(ruta("data_jugadores.csv"), index=False)
                     st.rerun()
 
         with tb_p:
@@ -140,37 +151,18 @@ elif menu == "🏃 Estadísticas (Admin)":
                 if st.form_submit_button("🔥 Guardar"):
                     st.session_state.pitchers = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != sel_p]
                     nueva_p = pd.DataFrame([{"Nombre": nom_p, "Equipo": eq_p, "JG": jg, "JP": jp, "IP": ip, "CL": cl}])
-                    st.session_state.pitchers = pd.concat([st.session_state.pitchers, nueva_p], ignore_index=True)
-                    st.session_state.pitchers.to_csv(ruta("data_pitchers.csv"), index=False)
+                    pd.concat([st.session_state.pitchers, nueva_p], ignore_index=True).to_csv(ruta("data_pitchers.csv"), index=False)
                     st.rerun()
 
-# ==========================================
-# RESTO DE SECCIONES
-# ==========================================
-elif menu == "📋 Rosters por Equipo":
-    st.header("📋 Roster Detallado")
-    if not st.session_state.equipos.empty:
-        eq_s = st.selectbox("Equipo:", st.session_state.equipos["Nombre"].tolist())
-        df_r = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq_s].copy()
-        if not df_r.empty:
-            df_r['AVG'] = ((df_r['H']+df_r['H2']+df_r['H3']+df_r['HR'])/df_r['VB'].replace(0,1)).fillna(0)
-            st.dataframe(df_r[["Nombre", "VB", "H", "H2", "H3", "HR", "AVG"]].style.format({"AVG": "{:.3f}"}), use_container_width=True)
-        df_rp = st.session_state.pitchers[st.session_state.pitchers["Equipo"] == eq_s].copy()
-        if not df_rp.empty:
-            df_rp['EFE'] = ((df_rp['CL'] * 7) / df_rp['IP'].replace(0, 1)).fillna(0)
-            st.dataframe(df_rp[["Nombre", "JG", "JP", "IP", "CL", "EFE"]].style.format({"EFE": "{:.2f}"}), use_container_width=True)
-    else: st.warning("Crea equipos primero.")
-
 elif menu == "👥 Equipos":
-    st.header("👥 Equipos")
-    if st.session_state.autenticado:
+    if es_admin:
         n_e = st.text_input("Nombre Equipo")
         if st.button("Registrar"):
-            st.session_state.equipos = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_e}])], ignore_index=True)
-            st.session_state.equipos.to_csv(ruta("data_equipos.csv"), index=False)
+            new_eq = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_e}])], ignore_index=True)
+            new_eq.to_csv(ruta("data_equipos.csv"), index=False)
             st.rerun()
     st.table(st.session_state.equipos)
 
 elif menu == "🏠 Inicio":
     st.title("⚾ Liga de Softbol 2026")
-    st.write("Consulta líderes, rosters y estadísticas oficiales.")
+    st.write("Consulta rosters y líderes oficiales de la temporada.")
