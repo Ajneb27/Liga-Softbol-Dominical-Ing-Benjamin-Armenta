@@ -173,3 +173,4 @@ elif menu == "🖼️ Galería":
         for i, f in enumerate(fotos):
             with c[i % 3]: st.image(os.path.join(FOTOS_DIR, f))
     else: st.write("No hay fotos aún.")
+
