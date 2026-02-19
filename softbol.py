@@ -11,7 +11,7 @@ from fpdf import FPDF
 st.set_page_config(page_title="Liga Softbol Pro 2026", layout="wide", page_icon="🥎")
 
 # URL REAL DE TU PÁGINA (CÁMBIALA AQUÍ)
-URL_MI_PAGINA = "https://tu-liga.streamlit.app" 
+URL_MI_PAGINA = "https://liga-softbol-dominical-ing-benjamin-armenta-2ojzdqfhxt7tfq3z6x.streamlit.app/" 
 
 # Archivos de Datos
 ARCHIVOS = ["data_bateo.csv", "data_pitcheo.csv", "data_juegos.csv", "data_fotos.csv", "data_perfiles.csv", "data_mvp.csv", "data_playoffs.csv"]
@@ -157,3 +157,4 @@ elif menu == "⚙️ CONFIG":
                     for a in ARCHIVOS: 
                         if os.path.exists(a): os.remove(a)
                     st.rerun()
+
