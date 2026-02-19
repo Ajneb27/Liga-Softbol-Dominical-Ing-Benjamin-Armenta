@@ -12,7 +12,8 @@ for d in [DATOS_DIR, FOTOS_DIR]:
 
 def path_archivo(n): return os.path.join(DATOS_DIR, n)
 
-COLS_J, COLS_P = ["Nombre","Equipo","VB","H","H2","H3","HR"], ["Nombre","Equipo","JG","JP","IP","CL","K"]
+COLS_J = ["Nombre","Equipo","VB","H","H2","H3","HR"]
+COLS_P = ["Nombre","Equipo","JG","JP","IP","CL","K"]
 COLS_CAL, COLS_ACC = ["Fecha","Hora","Campo","Local","Visitante","Score"], ["Equipo","Password"]
 
 def leer_csv(n, cols):
@@ -27,7 +28,7 @@ def leer_csv(n, cols):
         except: return pd.DataFrame(columns=cols)
     return pd.DataFrame(columns=cols)
 
-# Carga de Datos Global
+# Carga de Datos
 st.session_state.jugadores = leer_csv("data_jugadores.csv", COLS_J)
 st.session_state.pitchers = leer_csv("data_pitchers.csv", COLS_P)
 st.session_state.equipos = leer_csv("data_equipos.csv", ["Nombre"])
@@ -52,83 +53,80 @@ with st.sidebar:
         st.success(f"🔓 {st.session_state.rol}")
         if st.button("Salir"): st.session_state.rol = "Invitado"; st.rerun()
 
-menu = st.sidebar.radio("IR A:", ["🏠 Inicio","🏆 LÍDERES","📊 Standings","📋 Rosters","🖼️ Galería"])
+menu = st.sidebar.radio("IR A:", ["🏠 Inicio","🏆 LÍDERES","📊 Standings","📋 Rosters","🔍 Buscador","🖼️ Galería"])
 if st.session_state.rol == "Admin": menu = st.sidebar.radio("ZONA ADMIN:", ["🏃 Admin General"])
 
-# --- 🏃 ADMIN GENERAL (GESTIÓN DE ALTAS Y BAJAS) ---
-if menu == "🏃 Admin General" and st.session_state.rol == "Admin":
-    t_e, t_b, t_p, t_c, t_k = st.tabs(["Equipos", "Bateadores", "Pitchers", "Calendario", "Claves"])
-
-    with t_e:
-        st.subheader("Gestión de Equipos")
-        with st.form("add_eq"):
-            n_e = st.text_input("Nombre del nuevo equipo:")
-            if st.form_submit_button("➕ Agregar Equipo"):
-                if n_e:
-                    pd.concat([st.session_state.equipos, pd.DataFrame([[n_e]], columns=["Nombre"])], ignore_index=True).to_csv(path_archivo("data_equipos.csv"), index=False); st.rerun()
-        
-        sel_e_del = st.selectbox("Eliminar Equipo:", ["-- Seleccionar --"] + st.session_state.equipos["Nombre"].tolist())
-        if st.button("🗑️ Eliminar Equipo Seleccionado") and sel_e_del != "-- Seleccionar --":
-            st.session_state.equipos[st.session_state.equipos["Nombre"] != sel_e_del].to_csv(path_archivo("data_equipos.csv"), index=False); st.rerun()
-
-    with t_b:
-        st.subheader("Gestión de Bateadores")
-        sel_j = st.selectbox("Jugador:", ["-- Nuevo --"] + sorted(st.session_state.jugadores["Nombre"].tolist()), key="sel_b")
-        v = ["","",0,0,0,0,0]
-        if sel_j != "-- Nuevo --":
-            d = st.session_state.jugadores[st.session_state.jugadores["Nombre"]==sel_j].iloc[0]
-            v = [d["Nombre"],d["Equipo"],int(d["VB"]),int(d["H"]),int(d["H2"]),int(d["H3"]),int(d["HR"])]
-        
-        with st.form("f_b"):
-            nom = st.text_input("Nombre", value=v[0]); eq = st.selectbox("Equipo", st.session_state.equipos["Nombre"].tolist())
-            c1,c2,c3,c4,c5 = st.columns(5)
-            vb=c1.number_input("VB",v[2]); h=c2.number_input("H",v[3]); h2=c3.number_input("H2",v[4]); h3=c4.number_input("H3",v[5]); hr=c5.number_input("HR",v[6])
-            if st.form_submit_button("💾 Guardar / Actualizar"):
-                df = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel_j]
-                pd.concat([df, pd.DataFrame([[nom,eq,vb,h,h2,h3,hr]], columns=COLS_J)], ignore_index=True).to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
-        
-        if sel_j != "-- Nuevo --" and st.button("🗑️ Eliminar Bateador"):
-            st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel_j].to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
-
-    with t_p:
-        st.subheader("Gestión de Pitchers")
-        sel_p = st.selectbox("Pitcher:", ["-- Nuevo --"] + sorted(st.session_state.pitchers["Nombre"].tolist()), key="sel_p")
-        vp = ["","",0,0,0,0,0]
-        if sel_p != "-- Nuevo --":
-            dp = st.session_state.pitchers[st.session_state.pitchers["Nombre"]==sel_p].iloc[0]
-            vp = [dp["Nombre"],dp["Equipo"],int(dp["JG"]),int(dp["JP"]),int(dp["IP"]),int(dp["CL"]),int(dp["K"])]
-        
-        with st.form("f_p"):
-            nom_p = st.text_input("Nombre", value=vp[0]); eq_p = st.selectbox("Equipo", st.session_state.equipos["Nombre"].tolist(), key="eq_p")
-            c1,c2,c3,c4,c5 = st.columns(5)
-            jg=c1.number_input("JG",vp[2]); jp=c2.number_input("JP",vp[3]); ip=c3.number_input("IP",vp[4]); cl=c4.number_input("CL",vp[5]); k=c5.number_input("K",vp[6])
-            if st.form_submit_button("💾 Guardar Pitcher"):
-                dfp = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != sel_p]
-                pd.concat([dfp, pd.DataFrame([[nom_p,eq_p,jg,jp,ip,cl,k]], columns=COLS_P)], ignore_index=True).to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
-        
-        if sel_p != "-- Nuevo --" and st.button("🗑️ Eliminar Pitcher"):
-            st.session_state.pitchers[st.session_state.pitchers["Nombre"] != sel_p].to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
-
-# --- LÍDERES, STANDINGS Y ROSTERS (SE MANTIENEN IGUAL) ---
-elif menu == "🏆 LÍDERES":
+# --- 🏆 SECCIÓN LÍDERES (RESTAURADA) ---
+if menu == "🏆 LÍDERES":
     st.title("🥇 Cuadro de Honor 2026")
-    t1, t2 = st.tabs(["🥖 Bateo", "🔥 Pitcheo"])
+    t1, t2 = st.tabs(["🥖 Departamentos de Bateo", "🔥 Departamentos de Pitcheo"])
     with t1:
         dfb = st.session_state.jugadores.copy()
         if not dfb.empty:
             dfb['H_T'] = dfb['H'] + dfb['H2'] + dfb['H3'] + dfb['HR']
             dfb['AVG'] = (dfb['H_T'] / dfb['VB'].replace(0, 1)).fillna(0)
             c1, c2 = st.columns(2)
-            c1.subheader("⚾ AVG"); c1.table(dfb.sort_values("AVG", ascending=False).head(5)[["Nombre","AVG"]].style.format({"AVG": "{:.3f}"}).highlight_max(color='#FFD700', axis=0))
-            c2.subheader("⚡ Hits"); c2.table(dfb.sort_values("H_T", ascending=False).head(5)[["Nombre","H_T"]].style.highlight_max(color='#FFD700', axis=0))
+            c1.subheader("⚾ Promedio (AVG)"); c1.table(dfb.sort_values("AVG", ascending=False).head(5)[["Nombre","AVG"]].style.format({"AVG": "{:.3f}"}).highlight_max(color='#FFD700', axis=0))
+            c2.subheader("⚡ Hits Totales"); c2.table(dfb.sort_values("H_T", ascending=False).head(5)[["Nombre","H_T"]].style.highlight_max(color='#FFD700', axis=0))
+            c3, c4, c5 = st.columns(3)
+            c3.subheader("🚀 Jonrones (HR)"); c3.table(dfb.sort_values("HR", ascending=False).head(5)[["Nombre","HR"]].style.highlight_max(color='#FFD700', axis=0))
+            c4.subheader("🥈 Dobles (H2)"); c4.table(dfb.sort_values("H2", ascending=False).head(5)[["Nombre","H2"]].style.highlight_max(color='#FFD700', axis=0))
+            c5.subheader("🥉 Triples (H3)"); c5.table(dfb.sort_values("H3", ascending=False).head(5)[["Nombre","H3"]].style.highlight_max(color='#FFD700', axis=0))
     with t2:
         dfp = st.session_state.pitchers.copy()
         if not dfp.empty:
             dfp['EFE'] = ((dfp['CL'] * 7) / dfp['IP'].replace(0, 1)).fillna(0)
             cp1, cp2 = st.columns(2)
-            cp1.subheader("📉 EFE"); cp1.table(dfp[dfp['IP']>0].sort_values("EFE").head(5)[["Nombre","EFE"]].style.format({"EFE": "{:.2f}"}).highlight_min(color='#FFD700', axis=0))
-            cp2.subheader("💎 JG"); cp2.table(dfp.sort_values("JG", ascending=False).head(5)[["Nombre","JG"]].style.highlight_max(color='#FFD700', axis=0))
+            cp1.subheader("📉 Efectividad (EFE)"); cp1.table(dfp[dfp['IP']>0].sort_values("EFE").head(5)[["Nombre","EFE"]].style.format({"EFE": "{:.2f}"}).highlight_min(color='#FFD700', axis=0))
+            cp2.subheader("💎 Ganados (JG)"); cp2.table(dfp.sort_values("JG", ascending=False).head(5)[["Nombre","JG"]].style.highlight_max(color='#FFD700', axis=0))
+            cp3, cp4 = st.columns(2)
+            cp3.subheader("🔥 Ponches (K)"); cp3.table(dfp.sort_values("K", ascending=False).head(5)[["Nombre","K"]].style.highlight_max(color='#FFD700', axis=0))
+            cp4.subheader("🕒 Innings (IP)"); cp4.table(dfp.sort_values("IP", ascending=False).head(5)[["Nombre","IP"]].style.highlight_max(color='#FFD700', axis=0))
 
+# --- 🏃 ADMIN GENERAL (GESTIÓN TOTAL) ---
+elif menu == "🏃 Admin General" and st.session_state.rol == "Admin":
+    t_e, t_b, t_p, t_c, t_k = st.tabs(["Equipos", "Bateadores", "Pitchers", "Calendario", "Claves"])
+    with t_e:
+        st.subheader("Equipos")
+        with st.form("ae"):
+            ne = st.text_input("Nuevo Equipo:")
+            if st.form_submit_button("Agregar"):
+                pd.concat([st.session_state.equipos, pd.DataFrame([[ne]], columns=["Nombre"])], ignore_index=True).to_csv(path_archivo("data_equipos.csv"), index=False); st.rerun()
+        de = st.selectbox("Eliminar:", ["--"] + st.session_state.equipos["Nombre"].tolist())
+        if st.button("Borrar Equipo") and de != "--":
+            st.session_state.equipos[st.session_state.equipos["Nombre"] != de].to_csv(path_archivo("data_equipos.csv"), index=False); st.rerun()
+    with t_b:
+        sel = st.selectbox("Jugador:", ["-- Nuevo --"] + sorted(st.session_state.jugadores["Nombre"].tolist()), key="admin_b")
+        v = ["","",0,0,0,0,0]
+        if sel != "-- Nuevo --":
+            d = st.session_state.jugadores[st.session_state.jugadores["Nombre"]==sel].iloc[0]
+            v = [d["Nombre"],d["Equipo"],int(d["VB"]),int(d["H"]),int(d["H2"]),int(d["H3"]),int(d["HR"])]
+        with st.form("fb"):
+            nom = st.text_input("Nombre", value=v[0]); eq = st.selectbox("Equipo", st.session_state.equipos["Nombre"].tolist())
+            c1,c2,c3,c4,c5 = st.columns(5)
+            vb=c1.number_input("VB",v[2]); h=c2.number_input("H",v[3]); h2=c3.number_input("H2",v[4]); h3=c4.number_input("H3",v[5]); hr=c5.number_input("HR",v[6])
+            if st.form_submit_button("Guardar"):
+                df = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel]
+                pd.concat([df, pd.DataFrame([[nom,eq,vb,h,h2,h3,hr]], columns=COLS_J)], ignore_index=True).to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
+        if sel != "-- Nuevo --" and st.button("Eliminar Bateador"):
+            st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel].to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
+    with t_p:
+        selp = st.selectbox("Pitcher:", ["-- Nuevo --"] + sorted(st.session_state.pitchers["Nombre"].tolist()))
+        vp = ["","",0,0,0,0,0]
+        if selp != "-- Nuevo --":
+            dp = st.session_state.pitchers[st.session_state.pitchers["Nombre"]==selp].iloc[0]
+            vp = [dp["Nombre"],dp["Equipo"],int(dp["JG"]),int(dp["JP"]),int(dp["IP"]),int(dp["CL"]),int(dp["K"])]
+        with st.form("fp"):
+            nomp = st.text_input("Nombre", value=vp[0]); eqp = st.selectbox("Equipo", st.session_state.equipos["Nombre"].tolist(), key="eqp")
+            c1,c2,c3,c4,c5 = st.columns(5)
+            jg=c1.number_input("JG",vp[2]); jp=c2.number_input("JP",vp[3]); ip=c3.number_input("IP",vp[4]); cl=c4.number_input("CL",vp[5]); k=c5.number_input("K",vp[6])
+            if st.form_submit_button("Guardar Pitcher"):
+                dfp = st.session_state.pitchers[st.session_state.pitchers["Nombre"] != selp]
+                pd.concat([dfp, pd.DataFrame([[nomp,eqp,jg,jp,ip,cl,k]], columns=COLS_P)], ignore_index=True).to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
+        if selp != "-- Nuevo --" and st.button("Eliminar Pitcher"):
+            st.session_state.pitchers[st.session_state.pitchers["Nombre"] != selp].to_csv(path_archivo("data_pitchers.csv"), index=False); st.rerun()
+
+# --- 📊 STANDINGS ---
 elif menu == "📊 Standings":
     st.title("📊 Posiciones")
     stats = {eq: {"JJ":0, "JG":0, "JP":0, "JE":0} for eq in st.session_state.equipos["Nombre"]}
@@ -147,20 +145,24 @@ elif menu == "📊 Standings":
     df_s["AVG"] = (df_s["JG"] / df_s["JJ"].replace(0,1)).fillna(0)
     st.table(df_s.sort_values(["AVG","JG"], ascending=False).style.format({"AVG":"{:.3f}"}).highlight_max(subset=["AVG"], color='#FFD700', axis=0))
 
+# --- 📋 ROSTERS ---
+elif menu == "📋 Rosters":
+    if not st.session_state.equipos.empty:
+        eq_sel = st.selectbox("Equipo:", st.session_state.equipos["Nombre"].tolist())
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("Bateadores")
+            dfb_eq = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq_sel].copy()
+            if not dfb_eq.empty:
+                dfb_eq['AVG'] = ((dfb_eq['H']+dfb_eq['H2']+dfb_eq['H3']+dfb_eq['HR']) / dfb_eq['VB'].replace(0,1)).fillna(0)
+                st.dataframe(dfb_eq.style.format({"AVG":"{:.3f}"}).highlight_max(color='#FFD700', subset=["AVG"]), use_container_width=True, hide_index=True)
+        with c2:
+            st.subheader("Pitchers")
+            dfp_eq = st.session_state.pitchers[st.session_state.pitchers["Equipo"] == eq_sel].copy()
+            if not dfp_eq.empty:
+                dfp_eq['EFE'] = ((dfp_eq['CL']*7)/dfp_eq['IP'].replace(0,1)).fillna(0)
+                st.dataframe(dfp_eq.style.format({"EFE":"{:.2f}"}).highlight_max(color='#FFD700', subset=["JG"]), use_container_width=True, hide_index=True)
+
 elif menu == "🏠 Inicio":
     st.markdown("<h1 style='text-align:center;'>⚾ LIGA DOMINICAL 2026</h1>", unsafe_allow_html=True)
     st.table(st.session_state.calendario)
-
-elif menu == "📋 Rosters":
-    if not st.session_state.equipos.empty:
-        eq_sel = st.selectbox("Seleccionar Equipo:", st.session_state.equipos["Nombre"].tolist())
-        st.subheader("🥖 Bateadores")
-        dfb_eq = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq_sel].copy()
-        if not dfb_eq.empty:
-            dfb_eq['AVG'] = ((dfb_eq['H']+dfb_eq['H2']+dfb_eq['H3']+dfb_eq['HR']) / dfb_eq['VB'].replace(0,1)).fillna(0)
-            st.dataframe(dfb_eq.style.format({"AVG":"{:.3f}"}).highlight_max(color='#FFD700', subset=["AVG"]), use_container_width=True, hide_index=True)
-        st.subheader("🔥 Pitchers")
-        dfp_eq = st.session_state.pitchers[st.session_state.pitchers["Equipo"] == eq_sel].copy()
-        if not dfp_eq.empty:
-            dfp_eq['EFE'] = ((dfp_eq['CL']*7)/dfp_eq['IP'].replace(0,1)).fillna(0)
-            st.dataframe(dfp_eq.style.format({"EFE":"{:.2f}"}).highlight_max(color='#FFD700', subset=["JG"]), use_container_width=True, hide_index=True)
