@@ -28,7 +28,7 @@ def leer_csv(n, cols):
         except: return pd.DataFrame(columns=cols)
     return pd.DataFrame(columns=cols)
 
-# Carga de Datos Global
+# Carga de Datos
 st.session_state.jugadores = leer_csv("data_jugadores.csv", COLS_J)
 st.session_state.pitchers = leer_csv("data_pitchers.csv", COLS_P)
 st.session_state.equipos = leer_csv("data_equipos.csv", ["Nombre"])
@@ -56,7 +56,7 @@ with st.sidebar:
 menu = st.sidebar.radio("IR A:", ["🏠 Inicio","🏆 LÍDERES","📊 Standings","📋 Rosters","🔍 Buscador","🖼️ Galería"])
 if st.session_state.rol == "Admin": menu = st.sidebar.radio("ZONA ADMIN:", ["🏃 Admin General"])
 
-# --- SECCIÓN LÍDERES (CON TODOS LOS DEPARTAMENTOS) ---
+# --- LÍDERES CON RESALTADO AMARILLO ---
 if menu == "🏆 LÍDERES":
     st.title("🥇 Cuadro de Honor")
     t_bateo, t_pitcheo = st.tabs(["🥖 Departamentos de Bateo", "🔥 Departamentos de Pitcheo"])
@@ -68,38 +68,26 @@ if menu == "🏆 LÍDERES":
             dfb['AVG'] = (dfb['H_T'] / dfb['VB'].replace(0, 1)).fillna(0)
             
             c1, c2 = st.columns(2)
-            c1.subheader("⚾ Promedio (AVG)")
-            c1.table(dfb.sort_values("AVG", ascending=False).head(5)[["Nombre","Equipo","AVG"]].style.format({"AVG": "{:.3f}"}))
-            c2.subheader("⚡ Hits Totales")
-            c2.table(dfb.sort_values("H_T", ascending=False).head(5)[["Nombre","Equipo","H_T"]])
+            c1.subheader("⚾ AVG"); c1.table(dfb.sort_values("AVG", ascending=False).head(5)[["Nombre","AVG"]].style.format({"AVG": "{:.3f}"}).highlight_max(color='#FFD700', axis=0))
+            c2.subheader("⚡ Hits Totales"); c2.table(dfb.sort_values("H_T", ascending=False).head(5)[["Nombre","H_T"]].style.highlight_max(color='#FFD700', axis=0))
             
             c3, c4, c5 = st.columns(3)
-            c3.subheader("🚀 Jonrones (HR)")
-            c3.table(dfb.sort_values("HR", ascending=False).head(5)[["Nombre","HR"]])
-            c4.subheader("🥈 Dobles (H2)")
-            c4.table(dfb.sort_values("H2", ascending=False).head(5)[["Nombre","H2"]])
-            c5.subheader("🥉 Triples (H3)")
-            c5.table(dfb.sort_values("H3", ascending=False).head(5)[["Nombre","H3"]])
-        else: st.info("Sin datos de bateo.")
+            c3.subheader("🚀 HR"); c3.table(dfb.sort_values("HR", ascending=False).head(5)[["Nombre","HR"]].style.highlight_max(color='#FFD700', axis=0))
+            c4.subheader("🥈 H2"); c4.table(dfb.sort_values("H2", ascending=False).head(5)[["Nombre","H2"]].style.highlight_max(color='#FFD700', axis=0))
+            c5.subheader("🥉 H3"); c5.table(dfb.sort_values("H3", ascending=False).head(5)[["Nombre","H3"]].style.highlight_max(color='#FFD700', axis=0))
 
     with t_pitcheo:
         dfp = st.session_state.pitchers.copy()
         if not dfp.empty:
             dfp['EFE'] = ((dfp['CL'] * 7) / dfp['IP'].replace(0, 1)).fillna(0)
             cp1, cp2 = st.columns(2)
-            cp1.subheader("📉 Efectividad (EFE)")
-            cp1.table(dfp[dfp['IP']>0].sort_values("EFE").head(5)[["Nombre","Equipo","EFE"]].style.format({"EFE": "{:.2f}"}))
-            cp2.subheader("💎 Juegos Ganados (JG)")
-            cp2.table(dfp.sort_values("JG", ascending=False).head(5)[["Nombre","Equipo","JG"]])
+            cp1.subheader("📉 EFE"); cp1.table(dfp[dfp['IP']>0].sort_values("EFE").head(5)[["Nombre","EFE"]].style.format({"EFE": "{:.2f}"}).highlight_min(color='#FFD700', axis=0))
+            cp2.subheader("💎 JG"); cp2.table(dfp.sort_values("JG", ascending=False).head(5)[["Nombre","JG"]].style.highlight_max(color='#FFD700', axis=0))
             
             cp3, cp4 = st.columns(2)
-            cp3.subheader("🔥 Ponches (K)")
-            cp3.table(dfp.sort_values("K", ascending=False).head(5)[["Nombre","K"]])
-            cp4.subheader("🕒 Innings (IP)")
-            cp4.table(dfp.sort_values("IP", ascending=False).head(5)[["Nombre","IP"]])
-        else: st.info("Sin datos de pitcheo.")
+            cp3.subheader("🔥 Ponches (K)"); cp3.table(dfp.sort_values("K", ascending=False).head(5)[["Nombre","K"]].style.highlight_max(color='#FFD700', axis=0))
+            cp4.subheader("🕒 IP"); cp4.table(dfp.sort_values("IP", ascending=False).head(5)[["Nombre","IP"]].style.highlight_max(color='#FFD700', axis=0))
 
-# --- SECCIÓN STANDINGS ---
 elif menu == "📊 Standings":
     st.title("📊 Posiciones")
     stats = {eq: {"JJ":0, "JG":0, "JP":0, "JE":0} for eq in st.session_state.equipos["Nombre"]}
@@ -107,8 +95,7 @@ elif menu == "📊 Standings":
         sc = str(f["Score"]).strip()
         if "-" in sc:
             try:
-                sl, sv = map(int, sc.split("-"))
-                l, v = f["Local"], f["Visitante"]
+                sl, sv = map(int, sc.split("-")); l, v = f["Local"], f["Visitante"]
                 if l in stats and v in stats:
                     stats[l]["JJ"]+=1; stats[v]["JJ"]+=1
                     if sl > sv: stats[l]["JG"]+=1; stats[v]["JP"]+=1
@@ -117,9 +104,8 @@ elif menu == "📊 Standings":
             except: continue
     df_s = pd.DataFrame.from_dict(stats, orient='index').reset_index().rename(columns={'index':'Equipo'})
     df_s["AVG"] = (df_s["JG"] / df_s["JJ"].replace(0,1)).fillna(0)
-    st.table(df_s.sort_values(["AVG","JG"], ascending=False).style.format({"AVG":"{:.3f}"}))
+    st.table(df_s.sort_values(["AVG","JG"], ascending=False).style.format({"AVG":"{:.3f}"}).highlight_max(subset=["AVG"], color='#FFD700', axis=0))
 
-# --- SECCIÓN ADMIN (FORMULARIO QUE PEDISTE) ---
 elif menu == "🏃 Admin General" and st.session_state.rol == "Admin":
     t_e, t_b, t_p, t_c, t_k = st.tabs(["Equipos", "Bateo", "Pitcheo", "Calendario", "Claves"])
     with t_b:
@@ -136,18 +122,6 @@ elif menu == "🏃 Admin General" and st.session_state.rol == "Admin":
                 df = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != sel]
                 pd.concat([df, pd.DataFrame([[nom,eq,vb,h,h2,h3,hr]], columns=COLS_J)], ignore_index=True).to_csv(path_archivo("data_jugadores.csv"), index=False); st.rerun()
 
-    with t_k:
-        with st.form("f_k"):
-            eq_k, pk = st.selectbox("Equipo:", st.session_state.equipos["Nombre"].tolist()), st.text_input("Clave:")
-            if st.form_submit_button("🔒 Asignar"):
-                df = st.session_state.accesos[st.session_state.accesos["Equipo"] != eq_k]
-                pd.concat([df, pd.DataFrame([[eq_k,pk]], columns=COLS_ACC)], ignore_index=True).to_csv(path_archivo("data_accesos.csv"), index=False); st.rerun()
-        st.table(st.session_state.accesos)
-
 elif menu == "🏠 Inicio":
     st.markdown("<h1 style='text-align:center;'>⚾ LIGA DOMINICAL</h1>", unsafe_allow_html=True)
     st.table(st.session_state.calendario)
-
-elif menu == "📋 Rosters":
-    eq = st.selectbox("Equipo:", st.session_state.equipos["Nombre"].tolist())
-    st.dataframe(st.session_state.jugadores[st.session_state.jugadores["Equipo"]==eq], use_container_width=True, hide_index=True)
