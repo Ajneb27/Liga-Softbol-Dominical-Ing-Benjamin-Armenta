@@ -10,7 +10,7 @@ if not os.path.exists(CARPETA_DATOS):
 def ruta(archivo):
     return os.path.join(CARPETA_DATOS, archivo)
 
-# Inicializar bases de datos en la sesión
+# Inicializar bases de datos
 if 'equipos' not in st.session_state:
     st.session_state.equipos = pd.read_csv(ruta("data_equipos.csv")) if os.path.exists(ruta("data_equipos.csv")) else pd.DataFrame(columns=["Nombre"])
 
@@ -30,72 +30,93 @@ with st.sidebar.form("login_form"):
 pass_maestra = open(ruta("config.txt"), "r").read().strip() if os.path.exists(ruta("config.txt")) else "softbol2026"
 es_admin = (pwd_input == pass_maestra)
 
-menu = st.sidebar.radio("MENÚ:", ["🏠 Inicio", "👥 Registro de Equipos", "🏃 Registro de Jugadores", "📊 Estadísticas por Equipo"])
+menu = st.sidebar.radio("MENÚ:", ["🏠 Inicio", "👥 Equipos (Alta/Editar)", "🏃 Jugadores (Alta/Editar)", "📊 Consulta por Equipo"])
 
 # ==========================================
-# SECCIÓN: REGISTRO DE EQUIPOS
+# SECCIÓN: EQUIPOS (ALTA Y EDICIÓN)
 # ==========================================
-if menu == "👥 Registro de Equipos":
+if menu == "👥 Equipos (Alta/Editar)":
     st.header("👥 Gestión de Equipos")
+    
     if es_admin:
-        with st.form("nuevo_equipo"):
-            n_eq = st.text_input("Nombre del Equipo (ej. Tomateros)")
-            if st.form_submit_button("Guardar Equipo"):
-                if n_eq and n_eq not in st.session_state.equipos['Nombre'].values:
-                    st.session_state.equipos = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_eq}])], ignore_index=True)
-                    guardar_datos()
-                    st.success(f"Equipo {n_eq} listo.")
-                else: st.error("Nombre inválido o ya existe.")
-    
-    st.subheader("Lista de Equipos")
-    st.dataframe(st.session_state.equipos, use_container_width=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("➕ Nuevo Equipo")
+            with st.form("nuevo_eq"):
+                n_eq = st.text_input("Nombre")
+                if st.form_submit_button("Guardar"):
+                    if n_eq and n_eq not in st.session_state.equipos['Nombre'].values:
+                        st.session_state.equipos = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": n_eq}])], ignore_index=True)
+                        guardar_datos(); st.success("Guardado")
+        
+        with col2:
+            st.subheader("✏️ Editar/Borrar Equipo")
+            if not st.session_state.equipos.empty:
+                eq_edit = st.selectbox("Selecciona equipo:", st.session_state.equipos['Nombre'])
+                nuevo_nom = st.text_input("Nuevo nombre:", value=eq_edit)
+                c_edit1, c_edit2 = st.columns(2)
+                if c_edit1.button("Actualizar Nombre"):
+                    st.session_state.equipos.loc[st.session_state.equipos['Nombre'] == eq_edit, 'Nombre'] = nuevo_nom
+                    # Actualizar también a los jugadores de ese equipo
+                    st.session_state.jugadores.loc[st.session_state.jugadores['Equipo'] == eq_edit, 'Equipo'] = nuevo_nom
+                    guardar_datos(); st.rerun()
+                if c_edit2.button("🗑️ Borrar Equipo"):
+                    st.session_state.equipos = st.session_state.equipos[st.session_state.equipos['Nombre'] != eq_edit]
+                    guardar_datos(); st.rerun()
+
+    st.subheader("Equipos en la Liga")
+    st.table(st.session_state.equipos)
 
 # ==========================================
-# SECCIÓN: REGISTRO DE JUGADORES (EDAD Y EQUIPO VINCULADO)
+# SECCIÓN: JUGADORES (ALTA Y EDICIÓN/TRANSFERENCIA)
 # ==========================================
-elif menu == "🏃 Registro de Jugadores":
-    st.header("🏃 Alta de Jugadores")
+elif menu == "🏃 Jugadores (Alta/Editar)":
+    st.header("🏃 Gestión de Jugadores")
     
-    lista_equipos = st.session_state.equipos['Nombre'].tolist()
+    lista_eq = st.session_state.equipos['Nombre'].tolist()
     
-    if not lista_equipos:
-        st.warning("⚠️ Primero debes registrar al menos un equipo en la sección anterior.")
-    elif es_admin:
-        with st.form("nuevo_jugador"):
-            nom_j = st.text_input("Nombre del Jugador")
-            edad_j = st.number_input("Edad", min_value=5, max_value=90, step=1)
-            # Aquí es donde se direcciona al equipo correcto
-            eq_j = st.selectbox("Asignar a Equipo:", lista_equipos)
+    if es_admin:
+        st.subheader("➕ Registrar Nuevo Jugador")
+        with st.form("nuevo_j"):
+            c1, c2, c3 = st.columns(3)
+            nj = c1.text_input("Nombre")
+            edj = c2.number_input("Edad", 5, 90, 20)
+            eqj = c3.selectbox("Equipo", lista_eq)
+            if st.form_submit_button("Registrar"):
+                st.session_state.jugadores = pd.concat([st.session_state.jugadores, pd.DataFrame([{"Nombre": nj, "Edad": edj, "Equipo": eqj, "H": 0, "HR": 0}])], ignore_index=True)
+                guardar_datos(); st.success(f"{nj} registrado")
+
+        st.divider()
+        st.subheader("✏️ Editar o Transferir Jugador")
+        if not st.session_state.jugadores.empty:
+            j_edit = st.selectbox("Selecciona jugador para editar:", st.session_state.jugadores['Nombre'])
+            # Obtener datos actuales
+            datos_act = st.session_state.jugadores[st.session_state.jugadores['Nombre'] == j_edit].iloc[0]
             
-            if st.form_submit_button("Registrar Jugador"):
-                if nom_j:
-                    nuevo_j = pd.DataFrame([{"Nombre": nom_j, "Edad": edad_j, "Equipo": eq_j, "H": 0, "HR": 0}])
-                    st.session_state.jugadores = pd.concat([st.session_state.jugadores, nuevo_j], ignore_index=True)
-                    guardar_datos()
-                    st.success(f"¡{nom_j} ha sido asignado a {eq_j}!")
-                else: st.error("El nombre no puede estar vacío.")
+            with st.form("edit_j"):
+                ce1, ce2, ce3 = st.columns(3)
+                nuevo_nj = ce1.text_input("Editar Nombre", value=datos_act['Nombre'])
+                nuevo_ed = ce2.number_input("Editar Edad", 5, 90, int(datos_act['Edad']))
+                nuevo_eq = ce3.selectbox("Transferir a Equipo", lista_eq, index=lista_equipos.index(datos_act['Equipo']) if datos_act['Equipo'] in lista_eq else 0)
+                
+                if st.form_submit_button("Guardar Cambios del Jugador"):
+                    idx = st.session_state.jugadores[st.session_state.jugadores['Nombre'] == j_edit].index[0]
+                    st.session_state.jugadores.at[idx, 'Nombre'] = nuevo_nj
+                    st.session_state.jugadores.at[idx, 'Edad'] = nuevo_ed
+                    st.session_state.jugadores.at[idx, 'Equipo'] = nuevo_eq
+                    guardar_datos(); st.success("Datos actualizados"); st.rerun()
 
-    st.subheader("Todos los Jugadores Registrados")
+    st.subheader("Lista Completa de Jugadores")
     st.dataframe(st.session_state.jugadores, use_container_width=True)
 
 # ==========================================
-# SECCIÓN: ESTADÍSTICAS POR EQUIPO (DIRECCIONAMIENTO)
+# SECCIÓN: CONSULTA (ROSTER POR EQUIPO)
 # ==========================================
-elif menu == "📊 Estadísticas por Equipo":
-    st.header("📊 Consulta por Equipo")
-    lista_equipos = st.session_state.equipos['Nombre'].tolist()
-    
-    if not lista_equipos:
-        st.info("No hay datos para mostrar.")
-    else:
-        filtro_eq = st.selectbox("Selecciona un equipo para ver su roster:", lista_equipos)
-        
-        # Filtrado inteligente
-        roster = st.session_state.jugadores[st.session_state.jugadores['Equipo'] == filtro_eq]
-        
-        if roster.empty:
-            st.warning(f"No hay jugadores en el equipo {filtro_eq}.")
-        else:
-            st.subheader(f"Roster de {filtro_eq}")
-            st.write(f"Total de jugadores: {len(roster)}")
-            st.dataframe(roster[["Nombre", "Edad", "H", "HR"]], use_container_width=True)
+elif menu == "📊 Consulta por Equipo":
+    st.header("📊 Roster por Equipo")
+    lista_eq = st.session_state.equipos['Nombre'].tolist()
+    if lista_eq:
+        f_eq = st.selectbox("Selecciona Equipo:", lista_eq)
+        roster = st.session_state.jugadores[st.session_state.jugadores['Equipo'] == f_eq]
+        st.write(f"Total de jugadores: {len(roster)}")
+        st.dataframe(roster[["Nombre", "Edad", "H", "HR"]], use_container_width=True)
