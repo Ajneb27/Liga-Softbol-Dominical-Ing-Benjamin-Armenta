@@ -11,7 +11,6 @@ if not os.path.exists(DATOS_DIR): os.makedirs(DATOS_DIR)
 
 def path_archivo(n): return os.path.join(DATOS_DIR, n)
 
-# Estructuras correctas que debe tener la liga
 COLUMNAS_BASE = {
     "data_jugadores.csv": ["Nombre", "Equipo", "VB", "H", "H2", "H3", "HR"],
     "data_pitchers.csv": ["Nombre", "Equipo", "JG", "JP", "IP", "CL", "K"],
@@ -19,26 +18,19 @@ COLUMNAS_BASE = {
     "data_calendario.csv": ["Jornada", "Fecha", "Hora", "Campo", "Local", "Visitante", "Score"]
 }
 
-# --- 2. FUNCIÓN DE REPARACIÓN Y CARGA ---
+# --- 2. CARGA Y REPARACIÓN ---
 def cargar_y_reparar(nombre_archivo):
     p = path_archivo(nombre_archivo)
     cols_necesarias = COLUMNAS_BASE[nombre_archivo]
-    
     if os.path.exists(p):
         try:
             df = pd.read_csv(p)
-            # Limpiar nombres de columnas con espacios
             df.columns = df.columns.str.strip()
-            # Agregar columnas faltantes si el archivo es viejo
             for c in cols_necesarias:
-                if c not in df.columns:
-                    df[c] = "" if c in ["Nombre", "Equipo", "Local", "Visitante", "Score", "Jornada"] else 0
-            # Limpiar espacios en los textos guardados
-            for col in df.select_dtypes(['object']).columns:
-                df[col] = df[col].astype(str).str.strip()
+                if c not in df.columns: df[c] = "" if c in ["Nombre", "Equipo", "Local", "Visitante", "Score", "Jornada"] else 0
+            for col in df.select_dtypes(['object']).columns: df[col] = df[col].astype(str).str.strip()
             return df[cols_necesarias]
-        except:
-            return pd.DataFrame(columns=cols_necesarias)
+        except: return pd.DataFrame(columns=cols_necesarias)
     return pd.DataFrame(columns=cols_necesarias)
 
 # --- 3. LOGIN ---
@@ -53,15 +45,54 @@ with st.sidebar:
                 st.session_state.rol = "Admin"
                 st.rerun()
     else:
-        if st.button("CERRAR SESIÓN"):
+        if st.button("SALIR"): 
             st.session_state.rol = "Invitado"
             st.rerun()
     
     menu = st.radio("MENÚ:", ["🏠 Inicio", "🏆 LÍDERES", "📊 Standings", "📋 Rosters", "⚙️ Admin General"])
 
-# --- 4. SECCIÓN ROSTERS (REPARADA) ---
-if menu == "📋 Rosters":
-    st.title("📋 Rosters Oficiales")
+# --- 4. ZONA ADMIN (CON ELIMINACIÓN ACTIVADA) ---
+if menu == "⚙️ Admin General":
+    if st.session_state.rol != "Admin":
+        st.error("Acceso Denegado")
+    else:
+        st.title("⚙️ Panel de Control")
+        st.warning("🗑️ **PARA ELIMINAR:** Selecciona la fila (cuadrito izquierdo) y pulsa la tecla **DELETE** de tu teclado. Luego pulsa **GUARDAR**.")
+
+        t1, t2, t3, t4 = st.tabs(["Equipos", "Bateadores", "Pitchers", "Calendario"])
+
+        with t1:
+            df_e = cargar_y_reparar("data_equipos.csv")
+            # num_rows="dynamic" permite añadir y eliminar filas
+            ed_e = st.data_editor(df_e, num_rows="dynamic", use_container_width=True, key="ed_eq")
+            if st.button("💾 GUARDAR EQUIPOS"):
+                ed_e.to_csv(path_archivo("data_equipos.csv"), index=False)
+                st.success("Cambios guardados"); st.rerun()
+
+        with t2:
+            df_j = cargar_y_reparar("data_jugadores.csv")
+            ed_j = st.data_editor(df_j, num_rows="dynamic", use_container_width=True, key="ed_bat")
+            if st.button("💾 GUARDAR BATEADORES"):
+                ed_j.to_csv(path_archivo("data_jugadores.csv"), index=False)
+                st.success("Cambios guardados"); st.rerun()
+
+        with t3:
+            df_p = cargar_y_reparar("data_pitchers.csv")
+            ed_p = st.data_editor(df_p, num_rows="dynamic", use_container_width=True, key="ed_pit")
+            if st.button("💾 GUARDAR PITCHERS"):
+                ed_p.to_csv(path_archivo("data_pitchers.csv"), index=False)
+                st.success("Cambios guardados"); st.rerun()
+
+        with t4:
+            df_c = cargar_y_reparar("data_calendario.csv")
+            ed_c = st.data_editor(df_c, num_rows="dynamic", use_container_width=True, key="ed_cal")
+            if st.button("💾 GUARDAR CALENDARIO"):
+                ed_c.to_csv(path_archivo("data_calendario.csv"), index=False)
+                st.success("Cambios guardados"); st.rerun()
+
+# --- 5. ROSTERS ---
+elif menu == "📋 Rosters":
+    st.title("📋 Rosters")
     df_e = cargar_y_reparar("data_equipos.csv")
     df_j = cargar_y_reparar("data_jugadores.csv")
     df_p = cargar_y_reparar("data_pitchers.csv")
@@ -73,55 +104,19 @@ if menu == "📋 Rosters":
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("🥖 Bateadores")
-            # Filtro robusto (ignora mayúsculas)
             db = df_j[df_j["Equipo"].str.upper() == eq_sel.upper()].copy()
             if not db.empty:
                 for c in ["VB","H","H2","H3","HR"]: db[c] = pd.to_numeric(db[c], errors='coerce').fillna(0)
                 db["AVG"] = ((db["H"]+db["H2"]+db["H3"]+db["HR"])/db["VB"].replace(0,1)).fillna(0)
                 st.dataframe(db[["Nombre","VB","H","H2","H3","HR","AVG"]].sort_values("AVG", ascending=False).style.format({"AVG":"{:.3f}"}), use_container_width=True, hide_index=True)
-            else: st.info(f"No hay bateadores en {eq_sel}")
-            
+            else: st.info(f"No hay jugadores en {eq_sel}")
         with c2:
             st.subheader("🔥 Pitchers")
             dp = df_p[df_p["Equipo"].str.upper() == eq_sel.upper()].copy()
             if not dp.empty:
                 st.dataframe(dp[["Nombre","JG","JP","IP","K"]], use_container_width=True, hide_index=True)
             else: st.info(f"No hay pitchers en {eq_sel}")
-    else: st.warning("No hay equipos registrados. Ve a Admin General.")
-
-# --- 5. ZONA ADMIN (EDICIÓN MAESTRA) ---
-elif menu == "⚙️ Admin General":
-    if st.session_state.rol != "Admin":
-        st.error("Acceso Denegado")
-    else:
-        st.title("⚙️ Panel de Control")
-        st.info("💡 Haz doble clic en una celda, escribe, presiona ENTER y luego el botón GUARDAR.")
-
-        t1, t2, t3, t4 = st.tabs(["Equipos", "Bateadores", "Pitchers", "Calendario"])
-
-        with t1:
-            df_e = cargar_y_reparar("data_equipos.csv")
-            ed_e = st.data_editor(df_e, num_rows="dynamic", use_container_width=True, key="ed_eq")
-            if st.button("💾 GUARDAR EQUIPOS"):
-                ed_e.to_csv(path_archivo("data_equipos.csv"), index=False); st.success("Guardado"); st.rerun()
-
-        with t2:
-            df_j = cargar_y_reparar("data_jugadores.csv")
-            ed_j = st.data_editor(df_j, num_rows="dynamic", use_container_width=True, key="ed_bat")
-            if st.button("💾 GUARDAR BATEADORES"):
-                ed_j.to_csv(path_archivo("data_jugadores.csv"), index=False); st.success("Guardado"); st.rerun()
-
-        with t3:
-            df_p = cargar_y_reparar("data_pitchers.csv")
-            ed_p = st.data_editor(df_p, num_rows="dynamic", use_container_width=True, key="ed_pit")
-            if st.button("💾 GUARDAR PITCHERS"):
-                ed_p.to_csv(path_archivo("data_pitchers.csv"), index=False); st.success("Guardado"); st.rerun()
-
-        with t4:
-            df_c = cargar_y_reparar("data_calendario.csv")
-            ed_c = st.data_editor(df_c, num_rows="dynamic", use_container_width=True, key="ed_cal")
-            if st.button("💾 GUARDAR CALENDARIO"):
-                ed_c.to_csv(path_archivo("data_calendario.csv"), index=False); st.success("Guardado"); st.rerun()
+    else: st.warning("No hay equipos registrados.")
 
 # --- 6. INICIO Y LÍDERES ---
 elif menu == "🏠 Inicio":
@@ -130,7 +125,7 @@ elif menu == "🏠 Inicio":
     st.dataframe(df_c, use_container_width=True, hide_index=True)
 
 elif menu == "🏆 LÍDERES":
-    st.title("🥇 Cuadro de Honor")
+    st.title("🥇 Líderes")
     df_j = cargar_y_reparar("data_jugadores.csv")
     if not df_j.empty:
         for c in ["VB","H","H2","H3","HR"]: df_j[c] = pd.to_numeric(df_j[c], errors='coerce').fillna(0)
