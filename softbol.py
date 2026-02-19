@@ -2,129 +2,106 @@ import streamlit as st
 import pandas as pd
 import os
 
-# --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="LIGA SOFTBOL 2026", layout="wide")
+# --- 1. CONFIGURACIÓN ESTRUCTURAL ---
+st.set_page_config(page_title="LIGA REINICIO", layout="wide")
 
-# Estilo para asegurar que los botones se vean y funcionen
-st.markdown("""
-    <style>
-    div.stButton > button { background-color: #D32F2F; color: white; font-weight: bold; border-radius: 5px; }
-    h1 { color: #B71C1C; text-align: center; }
-    </style>
-    """, unsafe_allow_html=True)
+DB_DIR = "database"
+if not os.path.exists(DB_DIR):
+    os.makedirs(DB_DIR)
 
-# --- 2. GESTIÓN DE ARCHIVOS (PERSISTENCIA TOTAL) ---
-DATOS_DIR = "datos_liga"
-FOTOS_DIR = "galeria_liga"
-for d in [DATOS_DIR, FOTOS_DIR]:
-    if not os.path.exists(d): os.makedirs(d)
-
-ARCHIVOS = {
-    "jugadores": ["Nombre", "Equipo", "VB", "H", "H2", "H3", "HR"],
+# Definimos las tablas base
+ESTRUCTURA = {
     "equipos": ["Nombre"],
-    "calendario": ["Fecha", "Hora", "Campo", "Local", "Visitante", "Score"],
-    "accesos": ["Equipo", "Password"]
+    "jugadores": ["Nombre", "Equipo", "VB", "H", "HR"],
+    "calendario": ["Fecha", "Local", "Visitante", "Score"]
 }
 
-def cargar_datos(tipo):
-    p = os.path.join(DATOS_DIR, f"data_{tipo}.csv")
-    if os.path.exists(p):
-        return pd.read_csv(p)
-    return pd.DataFrame(columns=ARCHIVOS[tipo])
+# --- 2. MOTOR DE DATOS (EL CORAZÓN DE LA APP) ---
+def cargar_tabla(nombre):
+    ruta = os.path.join(DB_DIR, f"{nombre}.csv")
+    if os.path.exists(ruta):
+        return pd.read_csv(ruta)
+    return pd.DataFrame(columns=ESTRUCTURA[nombre])
 
-def guardar_datos(tipo, df):
-    p = os.path.join(DATOS_DIR, f"data_{tipo}.csv")
-    df.to_csv(p, index=False)
-    st.session_state[tipo] = df # Actualiza la memoria RAM de la app
+def guardar_y_refrescar(nombre, df):
+    ruta = os.path.join(DB_DIR, f"{nombre}.csv")
+    df.to_csv(ruta, index=False)
+    st.session_state[nombre] = df
+    st.cache_data.clear() # Limpia cualquier memoria vieja
+    st.rerun() # Fuerza a la app a mostrar el cambio
 
-# Cargar todo al inicio
-for t in ARCHIVOS:
-    if t not in st.session_state:
-        st.session_state[t] = cargar_datos(t)
+# Carga inicial en la memoria de la App
+for tabla in ESTRUCTURA:
+    if tabla not in st.session_state:
+        st.session_state[tabla] = cargar_tabla(tabla)
 
-# --- 3. LOGIN ---
-if 'rol' not in st.session_state: st.session_state.rol = "Invitado"
-if 'eq_gestion' not in st.session_state: st.session_state.eq_gestion = None
+# --- 3. INTERFAZ VISUAL ---
+st.title("⚾ SISTEMA DE GESTIÓN DE LIGA")
+st.markdown("---")
 
-with st.sidebar:
-    st.title("⚾ LIGA 2026")
-    if st.session_state.rol == "Invitado":
-        pwd = st.text_input("Clave:", type="password")
-        if st.button("Entrar"):
-            if pwd == "softbol2026": 
-                st.session_state.rol = "Admin"; st.rerun()
-            elif pwd in st.session_state.accesos["Password"].values:
-                f = st.session_state.accesos[st.session_state.accesos["Password"] == pwd].iloc[0]
-                st.session_state.rol = "Delegado"; st.session_state.eq_gestion = f["Equipo"]; st.rerun()
-    else:
-        st.write(f"Usuario: {st.session_state.rol}")
-        if st.button("Salir"):
-            st.session_state.rol = "Invitado"; st.rerun()
+menu = st.sidebar.radio("MENÚ PRINCIPAL", ["🏠 Tablero", "👥 Equipos", "🏃 Jugadores", "📅 Calendario"])
 
-menu = st.sidebar.radio("Ir a:", ["🏠 Inicio", "📊 Standings", "🔍 Buscador"] + 
-                       (["🏃 Admin"] if st.session_state.rol == "Admin" else []) +
-                       (["📋 Mi Equipo"] if st.session_state.rol == "Delegado" else []))
-
-# --- 4. SECCIONES ---
-
-if menu == "🏠 Inicio":
-    st.header("⚾ BIENVENIDOS A LA LIGA")
-    st.subheader("📅 Próximos Juegos")
-    st.table(st.session_state.calendario)
-
-elif menu == "📊 Standings":
-    st.header("📊 Posiciones Actuales")
-    # Lógica de cálculo simplificada para evitar errores de actualización
-    cal = st.session_state.calendario
-    cal = cal[cal['Score'].str.contains('-', na=False)]
-    if not cal.empty:
-        stats = []
-        for eq in st.session_state.equipos["Nombre"]:
-            jg = jp = 0
-            for _, f in cal[(cal['Local']==eq) | (cal['Visitante']==eq)].iterrows():
-                s = f['Score'].split('-')
-                if f['Local'] == eq:
-                    if int(s[0]) > int(s[1]): jg += 1
-                    else: jp += 1
-                else:
-                    if int(s[1]) > int(s[0]): jg += 1
-                    else: jp += 1
-            stats.append({"Equipo": eq, "JG": jg, "JP": jp})
-        st.table(pd.DataFrame(stats).sort_values("JG", ascending=False))
-
-elif menu == "📋 Mi Equipo":
-    eq = st.session_state.eq_gestion
-    st.subheader(f"Gestión: {eq}")
+# --- SECCIÓN: EQUIPOS ---
+if menu == "👥 Equipos":
+    st.header("Gestión de Equipos")
     
-    # AGREGAR
-    with st.expander("Añadir Jugador"):
-        nom = st.text_input("Nombre:")
-        if st.button("Guardar"):
-            nuevo = pd.DataFrame([[nom, eq, 0,0,0,0,0]], columns=ARCHIVOS["jugadores"])
-            df_actual = pd.concat([st.session_state.jugadores, nuevo], ignore_index=True)
-            guardar_datos("jugadores", df_actual)
-            st.success("Añadido"); st.rerun()
+    # Formulario para agregar
+    with st.form("nuevo_equipo", clear_on_submit=True):
+        nombre_eq = st.text_input("Nombre del Nuevo Equipo")
+        if st.form_submit_button("➕ Registrar Equipo"):
+            if nombre_eq:
+                nuevo_df = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": nombre_eq}])], ignore_index=True)
+                guardar_y_refrescar("equipos", nuevo_df)
 
-    # ELIMINAR
-    mis_j = st.session_state.jugadores[st.session_state.jugadores["Equipo"] == eq]
-    eliminar = st.selectbox("Dar de baja:", ["--"] + mis_j["Nombre"].tolist())
-    if st.button("Confirmar Baja") and eliminar != "--":
-        df_actual = st.session_state.jugadores[st.session_state.jugadores["Nombre"] != eliminar]
-        guardar_datos("jugadores", df_actual)
-        st.rerun()
+    # Tabla y Borrado
+    st.subheader("Equipos Registrados")
+    if not st.session_state.equipos.empty:
+        st.dataframe(st.session_state.equipos, use_container_width=True)
+        equipo_a_borrar = st.selectbox("Selecciona para eliminar:", st.session_state.equipos["Nombre"])
+        if st.button("🗑️ Eliminar Equipo Seleccionado"):
+            df_reducido = st.session_state.equipos[st.session_state.equipos["Nombre"] != equipo_a_borrar]
+            guardar_y_refrescar("equipos", df_reducido)
 
-elif menu == "🏃 Admin":
-    t1, t2 = st.tabs(["Equipos", "Resultados"])
-    with t1:
-        ne = st.text_input("Nombre de Equipo:")
-        if st.button("Registrar Equipo"):
-            df = pd.concat([st.session_state.equipos, pd.DataFrame([[ne]], columns=["Nombre"])], ignore_index=True)
-            guardar_datos("equipos", df); st.rerun()
-            
-    with t2:
-        idx = st.selectbox("Juego:", st.session_state.calendario.index)
-        sc = st.text_input("Score (ej: 10-5):")
-        if st.button("Actualizar Marcador"):
-            st.session_state.calendario.at[idx, "Score"] = sc
-            guardar_datos("calendario", st.session_state.calendario)
-            st.success("Marcador Guardado"); st.rerun()
+# --- SECCIÓN: JUGADORES ---
+elif menu == "🏃 Jugadores":
+    st.header("Control de Jugadores")
+    
+    if st.session_state.equipos.empty:
+        st.warning("⚠️ Primero debes registrar al menos un equipo.")
+    else:
+        with st.form("nuevo_jugador", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            n_jug = col1.text_input("Nombre del Jugador")
+            e_jug = col2.selectbox("Equipo", st.session_state.equipos["Nombre"])
+            if st.form_submit_button("✅ Guardar Jugador"):
+                nuevo_j = pd.DataFrame([{"Nombre": n_jug, "Equipo": e_jug, "VB": 0, "H": 0, "HR": 0}])
+                df_j_final = pd.concat([st.session_state.jugadores, nuevo_j], ignore_index=True)
+                guardar_y_refrescar("jugadores", df_j_final)
+
+        st.subheader("Roster General")
+        st.dataframe(st.session_state.jugadores, use_container_width=True, hide_index=True)
+
+# --- SECCIÓN: CALENDARIO ---
+elif menu == "📅 Calendario":
+    st.header("Calendario y Resultados")
+    
+    with st.expander("🗓️ Programar Nuevo Juego"):
+        with st.form("juego"):
+            f = st.date_input("Fecha")
+            loc = st.selectbox("Local", st.session_state.equipos["Nombre"], key="loc")
+            vis = st.selectbox("Visitante", st.session_state.equipos["Nombre"], key="vis")
+            if st.form_submit_button("Programar"):
+                nuevo_p = pd.DataFrame([{"Fecha": str(f), "Local": loc, "Visitante": vis, "Score": "0-0"}])
+                df_c = pd.concat([st.session_state.calendario, nuevo_p], ignore_index=True)
+                guardar_y_refrescar("calendario", df_c)
+
+    st.subheader("Partidos")
+    st.dataframe(st.session_state.calendario, use_container_width=True)
+
+# --- SECCIÓN: TABLERO (HOME) ---
+elif menu == "🏠 Tablero":
+    st.subheader("Resumen de la Liga")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Equipos", len(st.session_state.equipos))
+    c2.metric("Jugadores", len(st.session_state.jugadores))
+    c3.metric("Juegos", len(st.session_state.calendario))
