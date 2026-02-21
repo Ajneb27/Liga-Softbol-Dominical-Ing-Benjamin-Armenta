@@ -29,6 +29,7 @@ def cargar_csv(archivo, columnas):
         except: return pd.DataFrame(columns=columnas)
     return pd.DataFrame(columns=columnas)
 
+# Carga de datos global
 df_j = cargar_csv(J_FILE, ["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "G", "P"])
 df_e = cargar_csv(E_FILE, ["Nombre", "Debut", "Fin", "Logo"])
 df_g = cargar_csv(G_FILE, ["Jornada", "Visitante", "CV", "HomeClub", "CH"])
@@ -43,8 +44,8 @@ with st.sidebar:
 
     if not st.session_state.admin:
         with st.expander("🔐 Acceso Administrador"):
-            u = st.text_input("Usuario")
-            p = st.text_input("Clave", type="password")
+            u = st.text_input("Usuario", key="user_login")
+            p = st.text_input("Clave", type="password", key="pass_login")
             if st.button("Entrar"):
                 if u == "admin" and p == "123":
                     st.session_state.admin = True
@@ -65,7 +66,7 @@ if menu == "🏠 INICIO":
     tab_reg, tab_play = st.tabs(["📅 TEMPORADA REGULAR", "🔥 PLAYOFFS"])
     with tab_reg:
         if not df_c.empty: st.dataframe(df_c[df_c["Tipo"] == "Regular"], hide_index=True, use_container_width=True)
-        else: st.info("Calendario vacío.")
+        else: st.info("No hay juegos programados.")
     with tab_play:
         playoffs = df_c[df_c["Tipo"] != "Regular"]
         if not playoffs.empty:
@@ -89,45 +90,26 @@ elif menu == "🏆 LÍDERES":
     st.header("🥇 Cuadro de Honor")
     cat_f = st.selectbox("Filtrar Categoría:", ["TODOS", "Novato", "Softbolista", "Refuerzo"])
     df_l = df_j.copy() if cat_f == "TODOS" else df_j[df_j["Categoria"] == cat_f].copy()
-    
-    # Cálculo de AVG (Average)
     df_l["AVG_NUM"] = (df_l["H"] / df_l["VB"]).fillna(0)
     df_l["AVG"] = df_l["AVG_NUM"].apply(lambda x: f"{x:.3f}")
 
-    tab_bat, tab_pit = st.tabs(["⚾ DEPARTAMENTOS DE BATEO", "🎯 DEPARTAMENTOS DE PITCHEO"])
-    
-    with tab_bat:
-        # Fila 1: Promedio, Hits y Home Runs
+    t_bat, t_pit = st.tabs(["⚾ BATEO", "🎯 PITCHEO"])
+    with t_bat:
         c1, c2, c3 = st.columns(3)
-        with c1:
-            st.subheader("🔥 Average")
-            st.dataframe(df_l[df_l["VB"] > 0].nlargest(10, 'AVG_NUM')[['Nombre', 'Equipo', 'AVG']], hide_index=True)
-        with c2:
-            st.subheader("⚡ Hits")
-            st.dataframe(df_l.nlargest(10, 'H')[['Nombre', 'Equipo', 'H']], hide_index=True)
-        with c3:
-            st.subheader("💣 Home Runs")
-            st.dataframe(df_l.nlargest(10, 'HR')[['Nombre', 'Equipo', 'HR']], hide_index=True)
-        
+        c1.write("### Average"); c1.dataframe(df_l[df_l["VB"]>0].nlargest(10,'AVG_NUM')[['Nombre','AVG']], hide_index=True)
+        c2.write("### Hits"); c2.dataframe(df_l.nlargest(10,'H')[['Nombre','H']], hide_index=True)
+        c3.write("### Home Runs"); c3.dataframe(df_l.nlargest(10,'HR')[['Nombre','HR']], hide_index=True)
         st.divider()
-        
-        # Fila 2: Dobles y Triples
         c4, c5 = st.columns(2)
-        with c4:
-            st.subheader("🚀 Dobles (2B)")
-            st.dataframe(df_l.nlargest(10, '2B')[['Nombre', 'Equipo', '2B']], hide_index=True)
-        with c5:
-            st.subheader("💨 Triples (3B)")
-            st.dataframe(df_l.nlargest(10, '3B')[['Nombre', 'Equipo', '3B']], hide_index=True)
-
-    with tab_pit:
-        st.subheader("🏆 Juegos Ganados")
-        df_p = df_l[(df_l["G"] > 0) | (df_l["P"] > 0)].sort_values(by=["G", "P"], ascending=[False, True])
-        st.dataframe(df_p[['Nombre', 'Equipo', 'G', 'P']], hide_index=True, use_container_width=True)
+        c4.write("### Dobles (2B)"); c4.dataframe(df_l.nlargest(10,'2B')[['Nombre','2B']], hide_index=True)
+        c5.write("### Triples (3B)"); c5.dataframe(df_l.nlargest(10,'3B')[['Nombre','3B']], hide_index=True)
+    with t_pit:
+        st.write("### Juegos Ganados")
+        st.dataframe(df_l.nlargest(10,'G')[['Nombre','Equipo','G','P']], hide_index=True)
 
 elif menu == "📋 ROSTERS":
     if not df_e.empty:
-        eq_s = st.selectbox("Equipo:", df_e["Nombre"].unique())
+        eq_s = st.selectbox("Seleccione Equipo:", df_e["Nombre"].unique())
         df_roster = df_j[df_j["Equipo"] == eq_s].copy()
         df_roster["AVG"] = (df_roster["H"] / df_roster["VB"]).fillna(0).apply(lambda x: f"{x:.3f}")
         st.dataframe(df_roster, use_container_width=True, hide_index=True)
@@ -137,19 +119,17 @@ elif menu == "📜 HISTORIAL":
     if j_sel:
         d = df_j[df_j["Nombre"] == j_sel].iloc[0]
         st.write(f"### {d['Nombre']} - {d['Equipo']}")
-        st.info(f"Categoría: {d['Categoria']}")
-        st.write(f"**Bateo:** H: {int(d['H'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])} | HR: {int(d['HR'])} | VB: {int(d['VB'])}")
-        st.write(f"**Pitcheo:** G: {int(d['G'])} | P: {int(d['P'])}")
+        st.write(f"**Estadísticas:** H: {int(d['H'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])} | HR: {int(d['HR'])} | VB: {int(d['VB'])}")
 
 elif menu == "🏘️ EQUIPOS":
-    st.header("🏘️ Equipos de la Liga")
+    st.header("🏘️ Equipos Registrados")
     if st.session_state.admin:
         with st.form("nuevo_e"):
-            n_e = st.text_input("Nombre del Equipo")
-            if st.form_submit_button("Registrar"):
+            n_e = st.text_input("Nombre del Nuevo Equipo")
+            if st.form_submit_button("Registrar Equipo"):
                 pd.concat([df_e, pd.DataFrame([{"Nombre":n_e, "Debut":ANIO_ACTUAL}])], ignore_index=True).to_csv(E_FILE, index=False)
                 st.rerun()
-    st.dataframe(df_e, hide_index=True)
+    st.dataframe(df_e[["Nombre", "Debut"]], hide_index=True)
 
 elif menu == "✍️ REGISTRAR":
     if st.session_state.admin:
@@ -157,11 +137,11 @@ elif menu == "✍️ REGISTRAR":
         with tj:
             with st.form("reg_j"):
                 nom = st.text_input("Nombre"); cat = st.selectbox("Cat", ["Novato", "Softbolista", "Refuerzo"])
-                eq = st.selectbox("Equipo", df_e["Nombre"].unique())
+                eq = st.selectbox("Equipo", df_e["Nombre"].unique()) if not df_e.empty else st.error("Registre un equipo primero")
                 v1, v2, v3, v4, v5 = st.columns(5)
                 vb, h, d2, d3, hr = v1.number_input("VB",0), v2.number_input("H",0), v3.number_input("2B",0), v4.number_input("3B",0), v5.number_input("HR",0)
                 gp, pp = st.number_input("G",0), st.number_input("P",0)
-                if st.form_submit_button("Guardar"):
+                if st.form_submit_button("Guardar Jugador"):
                     df_j = pd.concat([df_j[df_j["Nombre"] != nom], pd.DataFrame([{"Nombre":nom,"Equipo":eq,"Categoria":cat,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr,"G":gp,"P":pp}])], ignore_index=True)
                     df_j.to_csv(J_FILE, index=False); st.rerun()
         with tr:
@@ -174,18 +154,23 @@ elif menu == "✍️ REGISTRAR":
             with st.form("reg_cal"):
                 tipo = st.selectbox("Tipo", ["Regular", "Semifinal", "Final"])
                 fe, ho, ca = st.text_input("Fecha"), st.text_input("Hora"), st.text_input("Campo")
-                vi = st.selectbox("Visitante", df_e["Nombre"].unique()); hc = st.selectbox("HomeClub", df_e["Nombre"].unique())
+                vi = st.selectbox("Visitante ", df_e["Nombre"].unique()); hc = st.selectbox("HomeClub ", df_e["Nombre"].unique())
                 if st.form_submit_button("Agendar"):
                     pd.concat([df_c, pd.DataFrame([{"Tipo":tipo,"Jornada":0,"Fecha":fe,"Hora":ho,"Visitante":vi,"HomeClub":hc,"Campo":ca}])], ignore_index=True).to_csv(C_FILE, index=False); st.rerun()
-    else: st.warning("Acceso Restringido.")
+    else: st.warning("Acceso solo para administradores.")
 
 elif menu == "🗑️ BORRAR":
     if st.session_state.admin:
-        st.header("🗑️ Limpieza de Datos")
-        if st.button("🗑️ Borrar Calendario"):
-            pd.DataFrame(columns=["Tipo", "Jornada", "Fecha", "Hora", "Visitante", "HomeClub", "Campo"]).to_csv(C_FILE, index=False); st.rerun()
-        if st.button("🗑️ Borrar Jugadores"):
-            pd.DataFrame(columns=["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "G", "P"]).to_csv(J_FILE, index=False); st.rerun()
+        st.header("🗑️ Zona de Eliminación")
+        if not df_j.empty:
+            jugador_sel = st.selectbox("Seleccione el Jugador a eliminar:", options=sorted(df_j["Nombre"].unique()))
+            if st.button("❌ Eliminar Jugador Seleccionado", type="primary"):
+                df_j[df_j["Nombre"] != jugador_sel].to_csv(J_FILE, index=False)
+                st.success(f"Jugador {jugador_sel} eliminado.")
+                st.rerun()
+        st.divider()
+        if st.button("🗑️ Borrar Calendario Completo"):
+            pd.DataFrame(columns=df_c.columns).to_csv(C_FILE, index=False); st.rerun()
     else: st.error("No autorizado.")
 
 elif menu == "💾 RESPALDO":
