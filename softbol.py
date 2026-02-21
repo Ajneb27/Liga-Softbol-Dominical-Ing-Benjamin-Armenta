@@ -10,9 +10,8 @@ JUGADORES_FILE = os.path.join(DATA_DIR, "jugadores_stats.csv")
 EQUIPOS_FILE = os.path.join(DATA_DIR, "equipos_lista.csv")
 ANIO_ACTUAL = 2026 
 
-# --- 2. MOTOR DE DATOS (PROTECCIÓN TOTAL DE COLUMNAS) ---
+# --- 2. MOTOR DE DATOS PROTEGIDO ---
 def cargar_base_datos():
-    # LISTA MAESTRA: Si falta alguna, el sistema la crea con 0
     cols_obligatorias = ["Nombre", "Equipo", "VB", "H", "2B", "3B", "HR", "G", "P"]
     if os.path.exists(JUGADORES_FILE):
         try:
@@ -22,15 +21,18 @@ def cargar_base_datos():
         except: df = pd.DataFrame(columns=cols_obligatorias)
     else: df = pd.DataFrame(columns=cols_obligatorias)
     
-    # Asegurar que los cálculos de "nlargest" no fallen (conversión numérica)
     for c in ["VB", "H", "2B", "3B", "HR", "G", "P"]:
         df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
     return df
 
 def cargar_equipos():
     if os.path.exists(EQUIPOS_FILE):
-        return pd.read_csv(EQUIPOS_FILE)
-    return pd.DataFrame(columns=["Nombre", "Debut"])
+        df = pd.read_csv(EQUIPOS_FILE)
+        # Asegurar columnas de tiempo
+        if "Debut" not in df.columns: df["Debut"] = ANIO_ACTUAL
+        if "Fin" not in df.columns: df["Fin"] = 0 # 0 significa que sigue activo
+        return df
+    return pd.DataFrame(columns=["Nombre", "Debut", "Fin"])
 
 # --- 3. INICIALIZACIÓN ---
 if 'admin_sesion' not in st.session_state: st.session_state.admin_sesion = False
@@ -55,94 +57,93 @@ with st.sidebar:
             st.rerun()
     
     st.divider()
-    menu = st.radio("Menú:", ["🏆 LÍDERES", "📋 ROSTERS", "📜 HISTORIAL JUGADOR", "🏘️ EQUIPOS", "✍️ REGISTRAR", "💾 RESPALDO"])
+    menu = st.radio("Menú:", ["🏆 LÍDERES", "📋 ROSTERS", "🏘️ EQUIPOS", "📜 HISTORIAL JUGADOR", "✍️ REGISTRAR", "💾 RESPALDO"])
 
-# --- 5. SECCIÓN LÍDERES (TODOS LOS DEPARTAMENTOS) ---
-if menu == "🏆 LÍDERES":
-    st.header("🔝 Líderes Departamentales (Top 10)")
-    tab_bat, tab_pit = st.tabs(["⚾ DEPARTAMENTOS BATEO", "🎯 DEPARTAMENTOS PITCHEO"])
+# --- 5. SECCIÓN EQUIPOS (DEBUT Y RETIRO) ---
+if menu == "🏘️ EQUIPOS":
+    st.header("🏘️ Gestión de Equipos y Trayectoria")
     
-    with tab_bat:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Hits (H)")
-            st.table(df_j.nlargest(10, 'H')[['Nombre', 'H']])
-            st.subheader("Dobles (2B)")
-            st.table(df_j.nlargest(10, '2B')[['Nombre', '2B']])
-        with col2:
-            st.subheader("Home Runs (HR)")
-            st.table(df_j.nlargest(10, 'HR')[['Nombre', 'HR']])
-            st.subheader("Triples (3B)")
-            st.table(df_j.nlargest(10, '3B')[['Nombre', '3B']])
-
-    with tab_pit:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Juegos Ganados (G)")
-            st.table(df_j.nlargest(10, 'G')[['Nombre', 'G']])
-        with col2:
-            st.subheader("Juegos Perdidos (P)")
-            st.table(df_j.nlargest(10, 'P')[['Nombre', 'P']])
-
-# --- 6. SECCIÓN ROSTERS ---
-elif menu == "📋 ROSTERS":
-    st.header("👥 Rosters por Equipo")
-    if df_e.empty: st.warning("No hay equipos. Agrégalos en '🏘️ EQUIPOS'.")
-    else:
-        eq_sel = st.selectbox("Equipo:", df_e["Nombre"].unique())
-        roster = df_j[df_j["Equipo"] == eq_sel]
-        st.dataframe(roster, use_container_width=True)
-
-# --- 7. SECCIÓN HISTORIAL ---
-elif menu == "📜 HISTORIAL JUGADOR":
-    st.header("📜 Ficha del Jugador")
-    if df_j.empty: st.info("No hay datos.")
-    else:
-        j_sel = st.selectbox("Buscar Jugador:", sorted(df_j["Nombre"].unique()))
-        datos = df_j[df_j["Nombre"] == j_sel].iloc
-        c1, c2 = st.columns(2)
-        c1.metric("Hits", int(datos['H']))
-        c1.metric("HR", int(datos['HR']))
-        c2.metric("Ganados", int(datos['G']))
-        c2.metric("Perdidos", int(datos['P']))
-
-# --- 8. SECCIÓN REGISTRAR (INCLUYE TODO) ---
-elif menu == "✍️ REGISTRAR":
-    if not st.session_state.admin_sesion: st.warning("Inicia sesión.")
-    elif df_e.empty: st.error("Crea un equipo primero.")
-    else:
-        st.header("✍️ Anotar Estadísticas")
-        tipo = st.radio("Tipo:", ["Bateo", "Pitcheo"], horizontal=True)
-        with st.form("reg_master"):
-            nom = st.text_input("Nombre:")
-            eq = st.selectbox("Equipo:", df_e["Nombre"].unique())
-            if tipo == "Bateo":
-                c1, c2, c3, c4, c5 = st.columns(5)
-                vb = c1.number_input("VB", 0); h = c2.number_input("H", 0)
-                d2 = c3.number_input("2B", 0); d3 = c4.number_input("3B", 0); hr = c5.number_input("HR", 0)
-                g, p = 0, 0
-            else:
-                p1, p2 = st.columns(2)
-                g = p1.number_input("G", 0); p = p2.number_input("P", 0)
-                vb, h, d2, d3, hr = 0, 0, 0, 0, 0
-            
-            if st.form_submit_button("💾 Guardar"):
-                df_j = df_j[df_j["Nombre"] != nom]
-                nueva = pd.DataFrame([{"Nombre": nom, "Equipo": eq, "VB": vb, "H": h, "2B": d2, "3B": d3, "HR": hr, "G": g, "P": p}])
-                pd.concat([df_j, nueva], ignore_index=True).to_csv(JUGADORES_FILE, index=False)
-                st.success("Guardado."); st.rerun()
-
-# --- 9. EQUIPOS Y RESPALDO ---
-elif menu == "🏘️ EQUIPOS":
     if st.session_state.admin_sesion:
-        with st.form("eq"):
-            ne = st.text_input("Equipo:"); de = st.number_input("Debut:", 1980, 2026, 2026)
-            if st.form_submit_button("Añadir"):
-                df_e = pd.concat([df_e, pd.DataFrame([{"Nombre": ne, "Debut": de}])], ignore_index=True)
-                df_e.to_csv(EQUIPOS_FILE, index=False); st.rerun()
-    st.table(df_e)
+        with st.form("form_equipos"):
+            col_e1, col_e2 = st.columns(2)
+            nombre_e = col_e1.text_input("Nombre del Equipo:")
+            anio_d = col_e2.number_input("Año de Debut:", 1980, ANIO_ACTUAL, ANIO_ACTUAL)
+            
+            st.info("Nota: Si el equipo sigue participando, deja el 'Año de Retiro' en 0.")
+            anio_f = st.number_input("Año de Retiro (0 si está Activo):", 0, ANIO_ACTUAL, 0)
+            
+            if st.form_submit_button("💾 Guardar/Actualizar Equipo"):
+                if nombre_e:
+                    # Actualizar si existe, si no, añadir
+                    df_e = df_e[df_e["Nombre"] != nombre_e]
+                    nuevo_eq = pd.DataFrame([{"Nombre": nombre_e, "Debut": anio_d, "Fin": anio_f}])
+                    df_e = pd.concat([df_e, nuevo_eq], ignore_index=True)
+                    df_e.to_csv(EQUIPOS_FILE, index=False)
+                    st.success(f"Equipo {nombre_e} actualizado.")
+                    st.rerun()
+
+    st.subheader("Historial de Equipos en la Liga")
+    if not df_e.empty:
+        df_display = df_e.copy()
+        
+        # Lógica de cálculo de temporadas
+        def calcular_temporadas(row):
+            fin = row['Fin'] if row['Fin'] > 0 else ANIO_ACTUAL
+            return int(fin - row['Debut'] + 1)
+
+        df_display["Estatus"] = df_display["Fin"].apply(lambda x: "🔴 Retirado" if x > 0 else "🟢 Activo")
+        df_display["Temporadas"] = df_display.apply(calcular_temporadas, axis=1)
+        
+        st.dataframe(df_display[["Nombre", "Debut", "Fin", "Estatus", "Temporadas"]].sort_values("Debut"), use_container_width=True)
+
+# --- 6. SECCIÓN LÍDERES (PROTEGIDA) ---
+elif menu == "🏆 LÍDERES":
+    st.header("🔝 Líderes Departamentales")
+    t1, t2 = st.tabs(["⚾ Bateo", "🎯 Pitcheo"])
+    with t1:
+        c1, c2, c3 = st.columns(3)
+        c1.subheader("Hits (H)"); c1.table(df_j.nlargest(10, 'H')[['Nombre', 'H']])
+        c1.subheader("Home Runs (HR)"); c1.table(df_j.nlargest(10, 'HR')[['Nombre', 'HR']])
+        c2.subheader("Dobles (2B)"); c2.table(df_j.nlargest(10, '2B')[['Nombre', '2B']])
+        c3.subheader("Triples (3B)"); c3.table(df_j.nlargest(10, '3B')[['Nombre', '3B']])
+    with t2:
+        c1, c2 = st.columns(2)
+        c1.subheader("Ganados (G)"); c1.table(df_j.nlargest(10, 'G')[['Nombre', 'G']])
+        c2.subheader("Perdidos (P)"); c2.table(df_j.nlargest(10, 'P')[['Nombre', 'P']])
+
+# --- 7. SECCIONES RESTANTES (REGISTRAR, RESPALDO, ROSTER) ---
+elif menu == "✍️ REGISTRAR":
+    if st.session_state.admin_sesion:
+        # Solo mostrar equipos ACTIVOS para registrar nuevos jugadores
+        equipos_activos = df_e[df_e["Fin"] == 0]["Nombre"].unique()
+        if len(equipos_activos) == 0: st.error("No hay equipos activos para registrar.")
+        else:
+            with st.form("reg"):
+                nom = st.text_input("Nombre:")
+                eq = st.selectbox("Equipo:", equipos_activos)
+                v1, v2, v3, v4, v5 = st.columns(5)
+                h_i = v1.number_input("H", 0); d2_i = v2.number_input("2B", 0); d3_i = v3.number_input("3B", 0); hr_i = v4.number_input("HR", 0); vb_i = v5.number_input("VB", 0)
+                p1, p2 = st.columns(2)
+                g_i = p1.number_input("G", 0); p_i = p2.number_input("P", 0)
+                if st.form_submit_button("Guardar"):
+                    df_j = df_j[df_j["Nombre"] != nom]
+                    n = pd.DataFrame([{"Nombre": nom, "Equipo": eq, "VB": vb_i, "H": h_i, "2B": d2_i, "3B": d3_i, "HR": hr_i, "G": g_i, "P": p_i}])
+                    pd.concat([df_j, n], ignore_index=True).to_csv(JUGADORES_FILE, index=False)
+                    st.success("Guardado"); st.rerun()
 
 elif menu == "💾 RESPALDO":
-    st.download_button("📥 Descargar CSV", df_j.to_csv(index=False), "liga.csv")
+    st.download_button("📥 Descargar", df_j.to_csv(index=False), "liga_2026.csv")
     f = st.file_uploader("📤 Restaurar", type="csv")
     if f: pd.read_csv(f).to_csv(JUGADORES_FILE, index=False); st.rerun()
+
+elif menu == "📋 ROSTERS":
+    if not df_e.empty:
+        eq = st.selectbox("Equipo:", df_e["Nombre"].unique())
+        st.dataframe(df_j[df_j["Equipo"] == eq], use_container_width=True)
+
+elif menu == "📜 HISTORIAL JUGADOR":
+    if not df_j.empty:
+        j = st.selectbox("Buscar:", sorted(df_j["Nombre"].unique()))
+        d = df_j[df_j["Nombre"] == j].iloc[0]
+        st.write(f"**Equipo:** {d['Equipo']} | **AVG:** {(d['H']/d['VB'] if d['VB']>0 else 0):.3f}")
+        st.write(f"**Stats:** H:{int(d['H'])} | 2B:{int(d['2B'])} | 3B:{int(d['3B'])} | HR:{int(d['HR'])} | G:{int(d['G'])} | P:{int(d['P'])}")
