@@ -52,7 +52,6 @@ with st.sidebar:
             if st.button("Entrar"):
                 if u == "admin" and p == "123": st.session_state.admin = True; st.rerun()
     else:
-        st.success("Admin Activo")
         if st.button("Cerrar Sesión"): st.session_state.admin = False; st.rerun()
     
     st.divider()
@@ -60,78 +59,69 @@ with st.sidebar:
 
 # --- 5. SECCIÓN 🏠 INICIO / PORTADA ---
 if menu == "🏠 INICIO / PORTADA":
-    col_logo, col_titulo = st.columns([1, 3])
-    
+    col_logo, col_titulo = st.columns([1, 4])
     with col_logo:
-        # Aquí puedes poner el link de tu logo real o usar un placeholder
-        st.image("https://cdn-icons-png.flaticon.com", width=150)
-    
+        st.image("https://cdn-icons-png.flaticon.com", width=120)
     with col_titulo:
-        st.title(f"Bienvenido a la {NOMBRE_LIGA}")
-        st.subheader("Compromiso, Deporte y Familia")
-
+        st.title(NOMBRE_LIGA)
+        st.subheader("Historia, Pasión y Convivencia Familiar")
     st.divider()
-    
-    col_hist, col_info = st.columns(2)
-    
+    col_hist, col_stats = st.columns(2)
     with col_hist:
         st.header("📜 Nuestra Historia")
         st.write(f"""
-        Fundada en **Agosto de {ANIO_INICIO_LIGA}**, la **{NOMBRE_LIGA}** nació con el firme propósito de 
-        fomentar la convivencia sana y la competencia deportiva de alto nivel entre amigos y familias.
-        
-        Lo que empezó como una reunión dominical de entusiastas, hoy se ha convertido en una de las ligas 
-        más respetadas de la región, destacando por su organización, transparencia estadística y el 
-        gran nivel de sus refuerzos y novatos por igual.
+        Fundada en **Agosto de {ANIO_INICIO_LIGA}**, la **{NOMBRE_LIGA}** surgió como un proyecto dominical 
+        para unir a la comunidad a través del deporte. Lo que comenzó con unos pocos equipos, hoy es un 
+        referente regional de organización y sana competencia.
         """)
-        
-    with col_info:
-        st.header("📊 Resumen de la Liga")
-        c1, c2 = st.columns(2)
-        c1.metric("Equipos Registrados", len(df_e))
-        c2.metric("Jugadores Activos", len(df_j))
-        
-        st.info("📅 ¡Te esperamos cada domingo en el diamante para vivir la pasión del softbol!")
+    with col_stats:
+        st.header("📊 Resumen General")
+        st.metric("Equipos", len(df_e))
+        st.metric("Jugadores", len(df_j))
 
 # --- 6. SECCIÓN 🏆 LÍDERES ---
 elif menu == "🏆 LÍDERES":
-    st.header("🥇 Cuadro de Honor Departamental")
+    st.header("🥇 Cuadro de Honor")
     t1, t2 = st.tabs(["⚾ Bateo", "🎯 Pitcheo"])
     with t1:
         c1, c2 = st.columns(2)
-        c1.subheader("Hits (H)"); c1.table(df_j.nlargest(10, 'H')[['Nombre', 'H', 'Equipo']])
-        c1.subheader("Home Runs (HR)"); c1.table(df_j.nlargest(10, 'HR')[['Nombre', 'HR', 'Equipo']])
-        c2.subheader("Dobles (2B)"); c2.table(df_j.nlargest(10, '2B')[['Nombre', '2B', 'Equipo']])
-        c2.subheader("Triples (3B)"); c2.table(df_j.nlargest(10, '3B')[['Nombre', '3B', 'Equipo']])
+        with c1:
+            st.write("**Hits (H)**"); st.table(df_j.nlargest(10, 'H')[['Nombre', 'H', 'Equipo']])
+            st.write("**Dobles (2B)**"); st.table(df_j.nlargest(10, '2B')[['Nombre', '2B', 'Equipo']])
+        with c2:
+            st.write("**Home Runs (HR)**"); st.table(df_j.nlargest(10, 'HR')[['Nombre', 'HR', 'Equipo']])
+            st.write("**Triples (3B)**"); st.table(df_j.nlargest(10, '3B')[['Nombre', '3B', 'Equipo']])
     with t2:
         c1, c2 = st.columns(2)
-        c1.subheader("Ganados (G)"); c1.table(df_j.sort_values('G', ascending=False).head(10)[['Nombre', 'G', 'Equipo']])
-        c2.subheader("Perdidos (P)"); c2.table(df_j.sort_values('P', ascending=False).head(10)[['Nombre', 'P', 'Equipo']])
+        with c1: st.write("**Ganados (G)**"); st.table(df_j.sort_values('G', ascending=False).head(10)[['Nombre', 'G', 'Equipo']])
+        with c2: st.write("**Perdidos (P)**"); st.table(df_j.sort_values('P', ascending=False).head(10)[['Nombre', 'P', 'Equipo']])
 
-# --- 7. SECCIÓN 🏘️ EQUIPOS (TRAYECTORIA) ---
-elif menu == "🏘️ EQUIPOS":
-    st.header("🏘️ Equipos y Trayectoria")
-    if st.session_state.admin:
-        with st.form("eq_f", clear_on_submit=True):
-            n=st.text_input("Equipo:"); d=st.number_input("Debut:", 2024, ANIO_ACTUAL, 2024); f=st.number_input("Retiro (0 si activo):", 0, ANIO_ACTUAL, 0)
-            if st.form_submit_button("Añadir"):
-                df_e = df_e[df_e["Nombre"] != n]
-                df_e = pd.concat([df_e, pd.DataFrame([{"Nombre": n, "Debut": d, "Fin": f}])], ignore_index=True)
-                df_e.to_csv(EQUIPOS_FILE, index=False); st.rerun()
-    
-    if not df_e.empty:
-        df_v = df_e.copy()
-        df_v["Temporadas"] = df_v.apply(lambda r: (r['Fin'] if r['Fin']>0 else ANIO_ACTUAL) - r['Debut'] + 1, axis=1)
-        df_v["Estatus"] = df_v["Fin"].apply(lambda x: "🟢 Activo" if x == 0 else f"🔴 Retirado ({x})")
-        st.table(df_v.sort_values("Temporadas", ascending=False)[["Nombre", "Debut", "Estatus", "Temporadas"]])
+# --- 7. SECCIÓN 📜 HISTORIAL JUGADOR (ERROR CORREGIDO) ---
+elif menu == "📜 HISTORIAL JUGADOR":
+    st.header("📜 Ficha del Jugador")
+    if not df_j.empty:
+        j_s = st.selectbox("Selecciona Jugador:", sorted(df_j["Nombre"].unique().tolist()))
+        # CORRECCIÓN: Filtramos y tomamos la primera fila como Serie
+        d = df_j[df_j["Nombre"] == j_s].iloc[0]
+        
+        st.divider()
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Equipo Actual", d['Equipo'])
+        c2.metric("Categoría", d['Categoria'])
+        avg = (d['H'] / d['VB']) if d['VB'] > 0 else 0
+        c3.metric("AVG Acumulado", f"{avg:.3f}")
+        
+        st.write(f"**Bateo Carrera:** VB: {int(d['VB'])} | H: {int(d['H'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])} | HR: {int(d['HR'])}")
+        st.write(f"**Pitcheo Carrera:** G: {int(d['G'])} | P: {int(d['P'])}")
+    else: st.info("No hay jugadores.")
 
-# --- 8. SECCIÓN ✍️ REGISTRAR ---
+# --- 8. SECCIÓN ✍️ REGISTRAR (AUTOCLEAN) ---
 elif menu == "✍️ REGISTRAR":
     if st.session_state.admin:
-        st.header("✍️ Anotación de Juego")
+        st.header("✍️ Anotación")
         sel = st.selectbox("Elegir Jugador:", ["NUEVO JUGADOR"] + sorted(df_j["Nombre"].unique().tolist()))
         if 'vals' not in st.session_state or st.session_state.get('last_sel') != sel:
-            if sel != "NUEVO JUGADOR": st.session_state.vals = df_j[df_j["Nombre"] == sel].iloc.to_dict()
+            if sel != "NUEVO JUGADOR": st.session_state.vals = df_j[df_j["Nombre"] == sel].iloc[0].to_dict()
             else: st.session_state.vals = {"Nombre": "", "Equipo": None, "Categoria": "Softbolista", "VB": 0, "H": 0, "2B": 0, "3B": 0, "HR": 0, "G": 0, "P": 0}
             st.session_state.last_sel = sel
 
@@ -151,34 +141,32 @@ elif menu == "✍️ REGISTRAR":
             d2 = v3.number_input("2B", value=int(st.session_state.vals["2B"]))
             d3 = v4.number_input("3B", value=int(st.session_state.vals["3B"]))
             hr = v5.number_input("HR", value=int(st.session_state.vals["HR"]))
-            g_f = st.number_input("G", value=int(st.session_state.vals["G"]))
-            p_f = st.number_input("P", value=int(st.session_state.vals["P"]))
+            g_f = st.number_input("G", value=int(st.session_state.vals["G"])); p_f = st.number_input("P", value=int(st.session_state.vals["P"]))
             if st.form_submit_button("💾 GUARDAR"):
                 df_j = df_j[df_j["Nombre"] != nom_f]
                 nueva = pd.DataFrame([{"Nombre": nom_f, "Equipo": eq_f, "Categoria": cat_f, "VB": vb, "H": h, "2B": d2, "3B": d3, "HR": hr, "G": g_f, "P": p_f}])
                 pd.concat([df_j, nueva], ignore_index=True).to_csv(JUGADORES_FILE, index=False); st.success("Guardado"); st.rerun()
+    else: st.warning("Inicia sesión")
 
-# --- 9. HISTORIAL ACUMULADO ---
-elif menu == "📜 HISTORIAL JUGADOR":
-    st.header("📜 Historial y Ficha del Jugador")
-    if not df_j.empty:
-        j_s = st.selectbox("Selecciona Jugador:", sorted(df_j["Nombre"].unique().tolist()))
-        d = df_j[df_j["Nombre"] == j_s].iloc
-        st.divider()
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Equipo", d['Equipo']); c2.metric("Categoría", d['Categoria'])
-        avg = (d['H'] / d['VB']) if d['VB'] > 0 else 0
-        c3.metric("AVG Acumulado", f"{avg:.3f}")
-        st.write(f"**Bateo Carrera:** VB: {int(d['VB'])} | H: {int(d['H'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])} | HR: {int(d['HR'])}")
-        st.write(f"**Pitcheo Carrera:** G: {int(d['G'])} | P: {int(d['P'])}")
+# --- 9. SECCIONES RESTANTES ---
+elif menu == "🏘️ EQUIPOS":
+    if st.session_state.admin:
+        with st.form("eq"):
+            n=st.text_input("Equipo:"); d=st.number_input("Debut:", 2024, 2026, 2024); f=st.number_input("Fin:", 0, 2026, 0)
+            if st.form_submit_button("Añadir"):
+                df_e = pd.concat([df_e, pd.DataFrame([{"Nombre": n, "Debut": d, "Fin": f}])], ignore_index=True)
+                df_e.to_csv(EQUIPOS_FILE, index=False); st.rerun()
+    if not df_e.empty:
+        df_v = df_e.copy()
+        df_v["Temporadas"] = df_v.apply(lambda r: (r['Fin'] if r['Fin']>0 else ANIO_ACTUAL) - r['Debut'] + 1, axis=1)
+        st.table(df_v)
 
-# --- 10. RESPALDO Y ROSTERS ---
 elif menu == "📋 ROSTERS":
     if not df_e.empty:
         eq = st.selectbox("Equipo:", df_e[df_e["Fin"] == 0]["Nombre"].unique())
         st.dataframe(df_j[df_j["Equipo"] == eq], use_container_width=True)
 
 elif menu == "💾 RESPALDO":
-    st.download_button("📥 Descargar", df_j.to_csv(index=False), "respaldo_liga.csv")
+    st.download_button("📥 Descargar", df_j.to_csv(index=False), "respaldo.csv")
     f = st.file_uploader("Subir", type="csv")
     if f: pd.read_csv(f).to_csv(JUGADORES_FILE, index=False); st.rerun()
