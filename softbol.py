@@ -19,7 +19,7 @@ C_FILE = os.path.join(DATA_DIR, "calendario_2026.csv")
 # --- 2. MOTOR DE DATOS ---
 st.set_page_config(page_title=NOMBRE_LIGA, layout="wide", page_icon="🥎")
 
-COLS_J = ["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "G", "P", "IP", "ER", "K"]
+COLS_J = ["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "G", "P"]
 
 def cargar_csv(archivo, columnas):
     if os.path.exists(archivo):
@@ -51,7 +51,7 @@ with st.sidebar:
 # --- 4. LÓGICA DE SECCIONES ---
 
 if menu == "🏠 INICIO":
-    c1, c2 = st.columns([1, 3])
+    c1, c2 = st.columns()
     with c1: st.image(LOGO_URL, width=150)
     with c2: st.markdown(f"<h1 style='color:#d4af37;'>{NOMBRE_LIGA}</h1>", unsafe_allow_html=True)
     
@@ -88,9 +88,8 @@ elif menu == "🏆 LÍDERES":
         c2.write("### Triples (3B)"); c2.dataframe(df_l.nlargest(10, '3B')[['Nombre', 'Equipo', '3B']], hide_index=True)
     with t2:
         df_p = df_l[(df_l["G"] > 0) | (df_l["P"] > 0)].copy()
-        c1, c2 = st.columns(2)
-        c1.write("### Juegos Ganados (G)"); c1.dataframe(df_p.nlargest(10, 'G')[['Nombre', 'Equipo', 'G', 'P']], hide_index=True)
-        c2.write("### Ponches (K)"); c2.dataframe(df_p.nlargest(10, 'K')[['Nombre', 'Equipo', 'K', 'G', 'P']], hide_index=True)
+        st.write("### Mejores Lanzadores (G-P)")
+        st.dataframe(df_p.sort_values(by=["G", "P"], ascending=[False, True]).head(10)[['Nombre', 'Equipo', 'G', 'P']], hide_index=True)
 
 elif menu == "📋 ROSTERS":
     if not df_e.empty:
@@ -110,11 +109,11 @@ elif menu == "📜 HISTORIAL":
         avg = (d['H'] / d['VB']) if d['VB'] > 0 else 0
         c3.metric("AVG Carrera", f"{avg:.3f}")
         st.info(f"**Bateo:** VB: {int(d['VB'])} | H: {int(d['H'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])} | HR: {int(d['HR'])}")
-        st.success(f"**Pitcheo:** G: {int(d['G'])} | P: {int(d['P'])} | IP: {d['IP']} | K: {int(d['K'])}")
+        st.success(f"**Pitcheo:** Juegos Ganados: {int(d['G'])} | Juegos Perdidos: {int(d['P'])}")
 
 elif menu == "✍️ REGISTRAR":
     if st.session_state.admin:
-        tj, tp = st.tabs(["BATEO Y CATEGORÍA", "PITCHEO"])
+        tj, tp = st.tabs(["ESTADÍSTICAS Y CATEGORÍA", "RÉCORD PITCHEO"])
         with tj:
             with st.form("f_bateo"):
                 nom = st.text_input("Nombre Completo")
@@ -123,24 +122,18 @@ elif menu == "✍️ REGISTRAR":
                 c1, c2, c3, c4, c5 = st.columns(5)
                 vb, h = c1.number_input("VB", 0), c2.number_input("H", 0)
                 d2, d3, hr = c3.number_input("2B", 0), c4.number_input("3B", 0), c5.number_input("HR", 0)
-                if st.form_submit_button("💾 GUARDAR BATEO"):
+                if st.form_submit_button("💾 GUARDAR DATOS"):
                     df_j = pd.concat([df_j[df_j["Nombre"] != nom], pd.DataFrame([{"Nombre":nom,"Equipo":eq,"Categoria":cat,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr}])], ignore_index=True)
                     df_j.to_csv(J_FILE, index=False); gc.collect(); st.success("¡Guardado!"); st.rerun()
         with tp:
             with st.form("f_pitching"):
                 nom_p = st.selectbox("Lanzador:", df_j["Nombre"].unique() if not df_j.empty else ["No hay jugadores"])
-                c1, c2, c3, c4, c5 = st.columns(5)
-                g, p = c1.number_input("G", 0), c2.number_input("P", 0)
-                ip, er, k = c3.number_input("IP", 0.0), c4.number_input("ER", 0), c5.number_input("K", 0)
-                if st.form_submit_button("💾 GUARDAR PITCHEO"):
-                    df_j.loc[df_j["Nombre"] == nom_p, ["G", "P", "IP", "ER", "K"]] = [g, p, ip, er, k]
-                    df_j.to_csv(J_FILE, index=False); gc.collect(); st.success("¡Pitcheo Guardado!"); st.rerun()
+                c1, c2 = st.columns(2)
+                g_p, p_p = c1.number_input("Ganados (G)", 0), c2.number_input("Perdidos (P)", 0)
+                if st.form_submit_button("💾 GUARDAR RÉCORD"):
+                    df_j.loc[df_j["Nombre"] == nom_p, ["G", "P"]] = [g_p, p_p]
+                    df_j.to_csv(J_FILE, index=False); gc.collect(); st.success("¡Récord de Pitcheo Actualizado!"); st.rerun()
     else: st.warning("Inicia sesión como administrador.")
-
-elif menu == "💾 RESPALDO":
-    if st.session_state.admin:
-        st.download_button("📥 DESCARGAR JUGADORES", df_j.to_csv(index=False), "jugadores.csv")
-        st.download_button("📥 DESCARGAR RESULTADOS", df_g.to_csv(index=False), "juegos.csv")
 
 elif menu == "🏘️ EQUIPOS":
     if st.session_state.admin:
@@ -155,3 +148,8 @@ elif menu == "🗑️ BORRAR":
         j_d = st.selectbox("Eliminar Jugador:", [""] + sorted(df_j["Nombre"].tolist()))
         if st.button("❌ ELIMINAR"):
             df_j[df_j["Nombre"] != j_d].to_csv(J_FILE, index=False); st.rerun()
+
+elif menu == "💾 RESPALDO":
+    if st.session_state.admin:
+        st.download_button("📥 DESCARGAR JUGADORES", df_j.to_csv(index=False), "jugadores.csv")
+        st.download_button("📥 DESCARGAR RESULTADOS", df_g.to_csv(index=False), "juegos.csv")
