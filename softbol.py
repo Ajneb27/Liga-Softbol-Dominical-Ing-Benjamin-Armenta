@@ -19,7 +19,6 @@ C_FILE = os.path.join(DATA_DIR, "calendario_2026.csv")
 # --- 2. CARGA DE DATOS ---
 st.set_page_config(page_title=NOMBRE_LIGA, layout="wide", page_icon="🥎")
 
-# Definición de columnas completas para no perder nada
 COLS_J = ["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "G", "P", "IP", "ER", "K"]
 
 if os.path.exists(J_FILE):
@@ -36,17 +35,17 @@ df_c = pd.read_csv(C_FILE) if os.path.exists(C_FILE) else pd.DataFrame(columns=[
 # --- 3. BARRA LATERAL ---
 with st.sidebar:
     st.image(LOGO_URL, width=100)
-    st.title(NOMBRE_LIGA)
+    st.title(f"🏆 {NOMBRE_LIGA}")
     
     st.info("📂 **RECUPERAR:** Sube tu respaldo si la app se reinicia.")
     subir = st.file_uploader("Subir jugadores.csv", type="csv")
     if subir:
         df_j = pd.read_csv(subir)
         df_j.to_csv(J_FILE, index=False)
-        st.rerun()
+        st.success("¡Datos recuperados!"); st.rerun()
 
     if 'admin' not in st.session_state: st.session_state.admin = False
-    menu = st.radio("Menú:", ["🏠 INICIO", "📊 STANDING", "🏆 LÍDERES", "📋 ROSTERS", "📜 HISTORIAL", "✍️ REGISTRAR", "💾 RESPALDO"])
+    menu = st.radio("Secciones:", ["🏠 INICIO", "📊 STANDING", "🏆 LÍDERES", "📋 ROSTERS", "📜 HISTORIAL", "✍️ REGISTRAR", "💾 RESPALDO"])
 
 # --- 4. SECCIONES ---
 
@@ -55,7 +54,7 @@ if menu == "🏠 INICIO":
     col_a, col_b = st.columns(2)
     with col_a:
         st.subheader(f"Temporada {ANIO_ACTUAL}")
-        if not df_g.empty: st.metric("Última Jornada", int(df_g["Jornada"].max()))
+        if not df_g.empty: st.metric("Jornada Actual", int(df_g["Jornada"].max()))
     with col_b:
         st.subheader("📅 Próximos Juegos")
         st.dataframe(df_c, hide_index=True)
@@ -72,65 +71,56 @@ elif menu == "📊 STANDING":
         st.table(pd.DataFrame(stats).sort_values("AVG", ascending=False))
 
 elif menu == "🏆 LÍDERES":
-    st.header("🥇 Cuadro de Honor")
+    st.header("🥇 Cuadro de Honor Departamental")
     t1, t2 = st.tabs(["⚾ BATEO", "🎯 PITCHEO"])
     
     with t1:
         c1, c2 = st.columns(2)
-        c1.write("### Hits"); c1.dataframe(df_j.nlargest(5, 'H')[['Nombre', 'H']], hide_index=True)
-        c1.write("### Dobles"); c1.dataframe(df_j.nlargest(5, '2B')[['Nombre', '2B']], hide_index=True)
-        c2.write("### Home Runs"); c2.dataframe(df_j.nlargest(5, 'HR')[['Nombre', 'HR']], hide_index=True)
-        c2.write("### Triples"); c2.dataframe(df_j.nlargest(5, '3B')[['Nombre', '3B']], hide_index=True)
+        c1.write("### Hits (H)"); c1.dataframe(df_j.nlargest(10, 'H')[['Nombre', 'Equipo', 'H']], hide_index=True)
+        c1.write("### Dobles (2B)"); c1.dataframe(df_j.nlargest(10, '2B')[['Nombre', 'Equipo', '2B']], hide_index=True)
+        c2.write("### Home Runs (HR)"); c2.dataframe(df_j.nlargest(10, 'HR')[['Nombre', 'Equipo', 'HR']], hide_index=True)
+        c2.write("### Triples (3B)"); c2.dataframe(df_j.nlargest(10, '3B')[['Nombre', 'Equipo', '3B']], hide_index=True)
 
     with t2:
-        # Filtro: Solo quienes han lanzado al menos 1 inning
         df_p = df_j[df_j["IP"] > 0].copy()
-        # Cálculo de Efectividad (ERA): (Carreras Limpias * 7) / Innings Pitcheados
         df_p["ERA"] = (df_p["ER"] * 7) / df_p["IP"]
         
         c1, c2 = st.columns(2)
-        c1.write("### Efectividad (ERA)"); c1.dataframe(df_p.nsmallest(5, 'ERA')[['Nombre', 'ERA']], hide_index=True)
-        c1.write("### Ponches (K)"); c1.dataframe(df_p.nlargest(5, 'K')[['Nombre', 'K']], hide_index=True)
-        c2.write("### Ganados (G)"); c2.dataframe(df_p.nlargest(5, 'G')[['Nombre', 'G']], hide_index=True)
-        c2.write("### Innings (IP)"); c2.dataframe(df_p.nlargest(5, 'IP')[['Nombre', 'IP']], hide_index=True)
+        c1.write("### Efectividad (ERA)"); c1.dataframe(df_p.nsmallest(5, 'ERA')[['Nombre', 'Equipo', 'ERA']], hide_index=True)
+        c1.write("### Ponches (K)"); c1.dataframe(df_p.nlargest(5, 'K')[['Nombre', 'Equipo', 'K']], hide_index=True)
+        c2.write("### Ganados (G)"); c2.dataframe(df_p.nlargest(5, 'G')[['Nombre', 'Equipo', 'G']], hide_index=True)
+        c2.write("### Innings (IP)"); c2.dataframe(df_p.nlargest(5, 'IP')[['Nombre', 'Equipo', 'IP']], hide_index=True)
 
 elif menu == "📋 ROSTERS":
     eq_s = st.selectbox("Equipo:", df_e["Nombre"].unique())
     roster = df_j[df_j["Equipo"] == eq_s].copy()
     roster["AVG"] = (roster["H"] / roster["VB"]).fillna(0).apply(lambda x: f"{x:.3f}")
-    st.write("### Estadísticas del Equipo")
     st.dataframe(roster, hide_index=True)
 
 elif menu == "✍️ REGISTRAR":
     if st.session_state.admin:
-        tj, tp = st.tabs(["BATEADOR/GENERAL", "LANZADOR (PITCHEO)"])
+        tj, tp = st.tabs(["BATEO", "PITCHEO"])
         with tj:
-            with st.form("f_bateo"):
-                nom = st.text_input("Nombre")
-                eq = st.selectbox("Equipo", df_e["Nombre"].unique())
+            with st.form("f_b"):
+                nom = st.text_input("Nombre"); eq = st.selectbox("Equipo", df_e["Nombre"].unique())
                 v1, v2, v3, v4, v5 = st.columns(5)
-                vb = v1.number_input("VB", 0); h = v2.number_input("H", 0)
-                d2 = v3.number_input("2B", 0); d3 = v4.number_input("3B", 0); hr = v5.number_input("HR", 0)
+                vb, h = v1.number_input("VB", 0), v2.number_input("H", 0)
+                d2, d3, hr = v3.number_input("2B", 0), v4.number_input("3B", 0), v5.number_input("HR", 0)
                 if st.form_submit_button("💾 GUARDAR BATEO"):
-                    idx = df_j[df_j["Nombre"] == nom].index
-                    if not idx.empty:
-                        df_j.loc[idx, ["Equipo", "VB", "H", "2B", "3B", "HR"]] = [eq, vb, h, d2, d3, hr]
-                    else:
-                        nueva = pd.DataFrame([{"Nombre":nom, "Equipo":eq, "VB":vb, "H":h, "2B":d2, "3B":d3, "HR":hr}])
-                        df_j = pd.concat([df_j, nueva], ignore_index=True)
-                    df_j.to_csv(J_FILE, index=False); st.success("¡Bateo Guardado!"); st.rerun()
-
+                    df_j = pd.concat([df_j[df_j["Nombre"] != nom], pd.DataFrame([{"Nombre":nom,"Equipo":eq,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr}])], ignore_index=True)
+                    df_j.to_csv(J_FILE, index=False); gc.collect(); st.success("¡Guardado!"); st.rerun()
         with tp:
-            with st.form("f_pitcher"):
+            with st.form("f_p"):
                 nom_p = st.selectbox("Lanzador:", df_j["Nombre"].unique())
                 c1, c2, c3, c4, c5 = st.columns(5)
-                g = c1.number_input("G", 0); p = c2.number_input("P", 0)
-                ip = c3.number_input("Innings (IP)", 0.0); er = c4.number_input("C. Limpias (ER)", 0); k = c5.number_input("Ponches (K)", 0)
+                g, p = c1.number_input("G", 0), c2.number_input("P", 0)
+                ip, er, k = c3.number_input("IP", 0.0), c4.number_input("ER", 0), c5.number_input("K", 0)
                 if st.form_submit_button("💾 GUARDAR PITCHEO"):
                     df_j.loc[df_j["Nombre"] == nom_p, ["G", "P", "IP", "ER", "K"]] = [g, p, ip, er, k]
-                    df_j.to_csv(J_FILE, index=False); st.success("¡Pitcheo Guardado!"); st.rerun()
-    else: st.warning("Inicie sesión como administrador.")
+                    df_j.to_csv(J_FILE, index=False); gc.collect(); st.success("¡Guardado!"); st.rerun()
+    else: st.warning("Área de Administrador.")
 
 elif menu == "💾 RESPALDO":
     if st.session_state.admin:
         st.download_button("📥 DESCARGAR JUGADORES", df_j.to_csv(index=False), "jugadores.csv")
+        st.download_button("📥 DESCARGAR RESULTADOS", df_g.to_csv(index=False), "juegos.csv")
