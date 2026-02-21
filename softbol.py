@@ -75,3 +75,4 @@ with tab2:
             st.rerun()
         else:
             st.error("Escribe un nombre válido.")
+
