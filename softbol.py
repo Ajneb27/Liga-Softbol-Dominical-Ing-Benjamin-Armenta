@@ -11,8 +11,8 @@ MAX_REFUERZOS = 3
 DATA_DIR = "liga_softbol_final_2026"
 if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
 
-JUGADORES_FILE = os.path.join(DATA_DIR, "jugadores_v10.csv")
-EQUIPOS_FILE = os.path.join(DATA_DIR, "equipos_v10.csv")
+JUGADORES_FILE = os.path.join(DATA_DIR, "jugadores_v11.csv")
+EQUIPOS_FILE = os.path.join(DATA_DIR, "equipos_v11.csv")
 
 # --- 2. MOTOR DE DATOS (PROTECCIÓN TOTAL) ---
 def cargar_jugadores():
@@ -132,10 +132,40 @@ elif menu == "🏘️ EQUIPOS":
         df_v = df_e.copy()
         df_v["Temporadas"] = df_v.apply(lambda r: (r['Fin'] if r['Fin']>0 else ANIO_ACTUAL) - r['Debut'] + 1, axis=1)
         df_v["Estatus"] = df_v["Fin"].apply(lambda x: "🟢 Activo" if x == 0 else "🔴 Retirado")
-        # ORDENAR: Primero los que llevan más temporadas
         st.table(df_v.sort_values(by="Temporadas", ascending=False)[["Nombre", "Debut", "Fin", "Estatus", "Temporadas"]])
 
-# --- 8. SECCIONES RESTANTES ---
+# --- 8. SECCIÓN BORRAR (ACTUALIZADA) ---
+elif menu == "🗑️ BORRAR":
+    if st.session_state.admin:
+        st.header("🗑️ Centro de Eliminación")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Borrar Jugador")
+            j_b = st.selectbox("Selecciona Jugador:", [""] + sorted(list(df_j["Nombre"].unique())))
+            if st.button("❌ Eliminar Jugador") and j_b != "":
+                df_j = df_j[df_j["Nombre"] != j_b]
+                df_j.to_csv(JUGADORES_FILE, index=False)
+                st.success(f"Jugador {j_b} eliminado.")
+                st.rerun()
+        
+        with col2:
+            st.subheader("Borrar Equipo")
+            e_b = st.selectbox("Selecciona Equipo:", [""] + sorted(list(df_e["Nombre"].unique())))
+            if st.button("❌ Eliminar Equipo") and e_b != "":
+                # Borrar el equipo
+                df_e = df_e[df_e["Nombre"] != e_b]
+                # Borrar también a sus jugadores vinculados
+                df_j = df_j[df_j["Equipo"] != e_b]
+                
+                df_e.to_csv(EQUIPOS_FILE, index=False)
+                df_j.to_csv(JUGADORES_FILE, index=False)
+                st.success(f"Equipo {e_b} y sus jugadores eliminados.")
+                st.rerun()
+    else:
+        st.error("Acceso restringido al Administrador.")
+
+# --- 9. SECCIONES RESTANTES ---
 elif menu == "📋 ROSTERS":
     if not df_e.empty:
         eq = st.selectbox("Equipo:", df_e["Nombre"].unique())
@@ -149,12 +179,6 @@ elif menu == "📜 HISTORIAL":
         d = df_j[df_j["Nombre"] == j].iloc[0]
         st.subheader(f"Ficha: {d['Nombre']}")
         st.write(f"**AVG:** {(d['H']/d['VB'] if d['VB']>0 else 0):.3f} | **Equipo:** {d['Equipo']}")
-
-elif menu == "🗑️ BORRAR":
-    if st.session_state.admin:
-        j_b = st.selectbox("Borrar Jugador:", [""] + list(df_j["Nombre"].unique()))
-        if st.button("Eliminar") and j_b:
-            df_j = df_j[df_j["Nombre"] != j_b]; df_j.to_csv(JUGADORES_FILE, index=False); st.rerun()
 
 elif menu == "💾 RESPALDO":
     st.download_button("📥 Descargar", df_j.to_csv(index=False), "respaldo.csv")
