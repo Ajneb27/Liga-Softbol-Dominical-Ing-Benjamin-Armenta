@@ -116,6 +116,32 @@ elif menu == "📋 ROSTERS":
         df_roster["AVG"] = (df_roster["H"] / df_roster["VB"]).fillna(0).apply(lambda x: f"{x:.3f}")
         st.dataframe(df_roster, use_container_width=True, hide_index=True)
 
+elif menu == "📜 HISTORIAL":
+    st.header("📜 Historial de Jugadores")
+    j_sel = st.selectbox("Buscar Jugador:", sorted(df_j["Nombre"].unique()) if not df_j.empty else ["No hay jugadores"])
+    
+    if not df_j.empty and j_sel != "No hay jugadores":
+        # Corregido: Usar .iloc[0] para obtener la serie de datos
+        d = df_j[df_j["Nombre"] == j_sel].iloc[0]
+        avg = d['H'] / d['VB'] if d['VB'] > 0 else 0
+        
+        st.subheader(f"Ficha Técnica: {d['Nombre']}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Equipo", d['Equipo'])
+        c2.metric("Categoría", d['Categoria'])
+        c3.metric("Average", f"{avg:.3f}")
+        
+        st.divider()
+        col_b, col_p = st.columns(2)
+        with col_b:
+            st.write("### ⚾ Bateo")
+            st.write(f"**VB:** {int(d['VB'])} | **H:** {int(d['H'])}")
+            st.write(f"**2B:** {int(d['2B'])} | **3B:** {int(d['3B'])} | **HR:** {int(d['HR'])}")
+        with col_p:
+            st.write("### 🎯 Pitcheo")
+            st.write(f"**Ganados:** {int(d['G'])}")
+            st.write(f"**Perdidos:** {int(d['P'])}")
+
 elif menu == "🏘️ EQUIPOS":
     st.header("🏘️ Equipos y Antigüedad")
     if st.session_state.admin:
@@ -145,6 +171,7 @@ elif menu == "✍️ REGISTRAR":
                         df_j = pd.concat([df_j[df_j["Nombre"] != nom], pd.DataFrame([{"Nombre":nom,"Equipo":eq,"Categoria":cat,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr,"G":gp,"P":pp}])], ignore_index=True)
                         df_j.to_csv(J_FILE, index=False); st.rerun()
             else: st.error("Registre un equipo primero.")
+        # ... Resto de sub-tabs (tr, tc) se mantienen igual ...
 
 elif menu == "🗑️ BORRAR":
     if st.session_state.admin:
