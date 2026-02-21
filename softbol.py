@@ -65,26 +65,18 @@ with st.sidebar:
 
 if menu == "🏠 INICIO":
     st.markdown(f"<h1 style='color:#d4af37;'>{NOMBRE_LIGA}</h1>", unsafe_allow_html=True)
-    
     tab_reg, tab_play = st.tabs(["📅 TEMPORADA REGULAR", "🔥 PLAYOFFS"])
-    
     with tab_reg:
         regular = df_c[df_c["Tipo"] == "Regular"] if "Tipo" in df_c.columns else df_c
-        if not regular.empty:
-            st.dataframe(regular, hide_index=True, use_container_width=True)
-        else: st.info("No hay juegos de temporada regular programados.")
-
+        if not regular.empty: st.dataframe(regular, hide_index=True, use_container_width=True)
+        else: st.info("No hay juegos programados.")
     with tab_play:
         if "Tipo" in df_c.columns and not df_c[df_c["Tipo"] != "Regular"].empty:
             playoffs = df_c[df_c["Tipo"] != "Regular"]
-            col_semi, col_final = st.columns(2)
-            with col_semi:
-                st.subheader("Semifinales")
-                st.dataframe(playoffs[playoffs["Tipo"] == "Semifinal"], hide_index=True)
-            with col_final:
-                st.subheader("Gran Final")
-                st.dataframe(playoffs[playoffs["Tipo"] == "Final"], hide_index=True)
-        else: st.warning("Aún no se han programado las llaves de Playoffs.")
+            c_s, c_f = st.columns(2)
+            c_s.subheader("Semifinales"); c_s.dataframe(playoffs[playoffs["Tipo"] == "Semifinal"], hide_index=True)
+            c_f.subheader("Gran Final"); c_f.dataframe(playoffs[playoffs["Tipo"] == "Final"], hide_index=True)
+        else: st.warning("Aún no se han programado Playoffs.")
 
 elif menu == "📊 STANDING":
     st.header("📊 Tabla de Posiciones")
@@ -125,6 +117,15 @@ elif menu == "📜 HISTORIAL":
         st.write(f"**Bateo:** H: {int(d['H'])} | HR: {int(d['HR'])} | VB: {int(d['VB'])}")
         st.write(f"**Pitcheo:** G: {int(d['G'])} | P: {int(d['P'])}")
 
+elif menu == "🏘️ EQUIPOS":
+    st.header("🏘️ Gestión de Equipos")
+    if st.session_state.admin:
+        with st.form("nuevo_e"):
+            n_e = st.text_input("Nombre del Equipo")
+            if st.form_submit_button("Registrar"):
+                pd.concat([df_e, pd.DataFrame([{"Nombre":n_e, "Debut":ANIO_ACTUAL}])], ignore_index=True).to_csv(E_FILE, index=False); st.rerun()
+    st.dataframe(df_e, hide_index=True)
+
 elif menu == "✍️ REGISTRAR":
     if st.session_state.admin:
         tj, tr, tc = st.tabs(["JUGADORES", "RESULTADOS", "CALENDARIO"])
@@ -161,5 +162,15 @@ elif menu == "💾 RESPALDO":
 
 elif menu == "🗑️ BORRAR":
     if st.session_state.admin:
+        st.subheader("⚠️ Zona de Peligro")
         if st.button("🗑️ Borrar Calendario Completo"):
-            pd.DataFrame(columns=["Tipo", "Jornada", "Fecha", "Hora", "Visitante", "HomeClub", "Campo"]).to_csv(C_FILE, index=False); st.rerun()
+            pd.DataFrame(columns=["Tipo", "Jornada", "Fecha", "Hora", "Visitante", "HomeClub", "Campo"]).to_csv(C_FILE, index=False)
+            st.success("Calendario borrado con éxito.")
+            st.rerun()
+        
+        if st.button("🗑️ Borrar Todos los Jugadores"):
+            pd.DataFrame(columns=["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "G", "P"]).to_csv(J_FILE, index=False)
+            st.success("Base de datos de jugadores reiniciada.")
+            st.rerun()
+    else:
+        st.error("Acceso restringido.")
