@@ -2,77 +2,78 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. CONFIGURACIÓN INICIAL
-st.set_page_config(page_title="SISTEMA LIGA", layout="wide")
+# --- 1. CONFIGURACIÓN Y ESTILOS ---
+st.set_page_config(page_title="Softbol Pro Manager", layout="centered")
 
-# Nombre de la carpeta de datos
-FOLDER = "datos_liga_v2"
-if not os.path.exists(FOLDER):
-    os.makedirs(FOLDER)
+DATA_DIR = "db_liga"
+EQUIPOS_FILE = f"{DATA_DIR}/equipos.csv"
+JUGADORES_FILE = f"{DATA_DIR}/jugadores.csv"
 
-# 2. FUNCIÓN MAESTRA DE CARGA/GUARDADO
-def procesar_datos(nombre_tabla):
-    ruta = os.path.join(FOLDER, f"{nombre_tabla}.csv")
-    
-    # Si el archivo NO existe, creamos uno con datos de prueba
-    if not os.path.exists(ruta):
-        if nombre_tabla == "equipos":
-            df = pd.DataFrame({"Nombre": ["Equipo de Prueba 1", "Equipo de Prueba 2"]})
-        else:
-            df = pd.DataFrame(columns=["Nombre", "Equipo", "VB", "H"])
-        df.to_csv(ruta, index=False)
-    
-    # Intentar leer el archivo
-    try:
-        return pd.read_csv(ruta)
-    except Exception as e:
-        st.error(f"Error cargando {nombre_tabla}: {e}")
-        return pd.DataFrame()
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
-# 3. CARGAR EN MEMORIA
-if "equipos" not in st.session_state:
-    st.session_state.equipos = procesar_datos("equipos")
-if "jugadores" not in st.session_state:
-    st.session_state.jugadores = procesar_datos("jugadores")
+# --- 2. MOTOR DE DATOS ---
+def cargar_datos(archivo, columnas):
+    if os.path.exists(archivo):
+        return pd.read_csv(archivo)
+    return pd.DataFrame(columns=columnas)
 
-# 4. INTERFAZ DE USUARIO
-st.title("⚾ LIGA DE SOFTBOL - REINICIO TOTAL")
+def guardar_datos(df, archivo):
+    df.to_csv(archivo, index=False)
 
-# Barra lateral para acciones
-with st.sidebar:
-    st.header("⚙️ Herramientas")
-    if st.button("🔄 Forzar Recarga (Limpiar todo)"):
-        st.cache_data.clear()
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+# Inicializar estados
+if 'equipos' not in st.session_state:
+    st.session_state.equipos = cargar_datos(EQUIPOS_FILE, ["Nombre"])
+if 'jugadores' not in st.session_state:
+    st.session_state.jugadores = cargar_datos(JUGADORES_FILE, ["Nombre", "Equipo", "VB", "H"])
 
-tab1, tab2 = st.tabs(["📊 Ver Datos", "➕ Añadir Equipos"])
+# --- 3. INTERFAZ ---
+st.title("🥎 Softbol Pro Manager")
 
-with tab1:
-    st.subheader("Equipos Registrados")
-    if st.session_state.equipos.empty:
-        st.warning("No hay equipos en la base de datos.")
+menu = st.sidebar.selectbox("Ir a:", ["Panel de Control", "Gestión de Equipos", "Registro de Jugadores"])
+
+if menu == "Panel de Control":
+    st.header("📊 Estadísticas de la Liga")
+    if not st.session_state.jugadores.empty:
+        df = st.session_state.jugadores.copy()
+        # Cálculo de Average (H / VB)
+        df['AVG'] = (df['H'] / df['VB']).fillna(0.000)
+        st.dataframe(df.sort_values(by="AVG", ascending=False), use_container_width=True)
     else:
-        st.table(st.session_state.equipos)
+        st.info("Aún no hay datos de jugadores para mostrar.")
+
+elif menu == "Gestión de Equipos":
+    st.header("🏘️ Equipos")
+    with st.form("nuevo_equipo"):
+        nombre = st.text_input("Nombre del nuevo equipo")
+        if st.form_submit_button("Registrar Equipo"):
+            if nombre and nombre not in st.session_state.equipos['Nombre'].values:
+                nuevo_df = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": nombre}])], ignore_index=True)
+                guardar_datos(nuevo_df, EQUIPOS_FILE)
+                st.session_state.equipos = nuevo_df
+                st.success(f"Equipo '{nombre}' registrado.")
+                st.rerun()
     
-    st.subheader("Lista de Jugadores")
-    st.dataframe(st.session_state.jugadores, use_container_width=True)
+    st.write("---")
+    st.table(st.session_state.equipos)
 
-with tab2:
-    st.subheader("Registrar Nuevo Equipo")
-    nuevo_eq = st.text_input("Nombre del Equipo:")
-    if st.button("Guardar Equipo"):
-        if nuevo_eq:
-            # Crear el nuevo DataFrame
-            nuevo_df = pd.concat([st.session_state.equipos, pd.DataFrame([{"Nombre": nuevo_eq}])], ignore_index=True)
-            # Guardar físicamente
-            ruta_eq = os.path.join(FOLDER, "equipos.csv")
-            nuevo_df.to_csv(ruta_eq, index=False)
-            # Actualizar memoria
-            st.session_state.equipos = nuevo_df
-            st.success(f"¡{nuevo_eq} guardado con éxito!")
-            st.rerun()
-        else:
-            st.error("Escribe un nombre válido.")
-
+elif menu == "Registro de Jugadores":
+    st.header("👤 Jugadores")
+    if st.session_state.equipos.empty:
+        st.warning("Primero debes registrar al menos un equipo.")
+    else:
+        with st.form("nuevo_jugador"):
+            nom_j = st.text_input("Nombre completo")
+            eq_j = st.selectbox("Equipo", st.session_state.equipos['Nombre'])
+            col1, col2 = st.columns(2)
+            vb = col1.number_input("Veces al Bate (VB)", min_value=0, step=1)
+            h = col2.number_input("Hits (H)", min_value=0, step=1)
+            
+            if st.form_submit_button("Añadir Jugador"):
+                if nom_j:
+                    nuevo_j = pd.DataFrame([{"Nombre": nom_j, "Equipo": eq_j, "VB": vb, "H": h}])
+                    df_final = pd.concat([st.session_state.jugadores, nuevo_j], ignore_index=True)
+                    guardar_datos(df_final, JUGADORES_FILE)
+                    st.session_state.jugadores = df_final
+                    st.success(f"{nom_j} añadido a {eq_j}")
+                    st.rerun()
