@@ -3,9 +3,8 @@ import pandas as pd
 import os
 
 # --- 1. CONFIGURACIÓN DE ARCHIVOS ---
-DATA_DIR = "datos_liga_2026"
-if not os.path.exists(DATA_DIR): 
-    os.makedirs(DATA_DIR)
+DATA_DIR = "datos_liga_final"
+if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
 
 EQUIPOS_FILE = os.path.join(DATA_DIR, "equipos.csv")
 JUGADORES_FILE = os.path.join(DATA_DIR, "jugadores.csv")
@@ -14,138 +13,130 @@ CONFIG_FILE = os.path.join(DATA_DIR, "config.csv")
 if not os.path.exists(CONFIG_FILE):
     pd.DataFrame([{"user": "admin", "pass": "123"}]).to_csv(CONFIG_FILE, index=False)
 
-# --- 2. FUNCIONES DE CARGA ---
-def cargar_csv(ruta, columnas):
-    if os.path.exists(ruta): 
-        return pd.read_csv(ruta)
-    return pd.DataFrame(columns=columnas)
+# --- 2. FUNCIONES DE CARGA Y LIMPIEZA ---
+def cargar_datos():
+    cols = ["Nombre", "Equipo", "VB", "H", "2B", "3B", "HR", "G", "P"]
+    if os.path.exists(JUGADORES_FILE):
+        df = pd.read_csv(JUGADORES_FILE)
+        # Verificar que todas las columnas existan
+        for c in cols:
+            if c not in df.columns: df[c] = 0
+    else:
+        df = pd.DataFrame(columns=cols)
+    
+    # Forzar conversión a números para que no se borren los departamentos
+    for col in ["VB", "H", "2B", "3B", "HR", "G", "P"]:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    return df
 
-# --- 3. INICIALIZACIÓN Y LIMPIEZA ---
+# --- 3. INICIALIZACIÓN ---
 if 'admin' not in st.session_state: st.session_state.admin = False
-if 'menu_actual' not in st.session_state: st.session_state.menu_actual = "🏆 Líderes (Top 10)"
-if 'equipo_seleccionado' not in st.session_state: st.session_state.equipo_seleccionado = None
+df_j = cargar_datos()
+df_e = pd.read_csv(EQUIPOS_FILE) if os.path.exists(EQUIPOS_FILE) else pd.DataFrame(columns=["Nombre"])
 
-cols_db = ["Nombre", "Equipo", "VB", "H", "2B", "3B", "HR", "G", "P"]
-df_e = cargar_csv(EQUIPOS_FILE, ["Nombre"])
-df_j = cargar_csv(JUGADORES_FILE, cols_db)
-
-# Conversión numérica para evitar errores de tipos
-for col in ["VB", "H", "2B", "3B", "HR", "G", "P"]:
-    df_j[col] = pd.to_numeric(df_j[col], errors='coerce').fillna(0)
-
-# --- 4. BARRA LATERAL ---
-st.set_page_config(page_title="Liga Softbol 2026", layout="wide")
+# --- 4. INTERFAZ ---
+st.set_page_config(page_title="Liga Softbol Pro", layout="wide")
 
 with st.sidebar:
-    st.title("🥎 Softbol Pro 2026")
+    st.title("🥎 Menú Principal")
     if not st.session_state.admin:
         with st.expander("🔐 Admin"):
-            u_in = st.text_input("Usuario")
-            p_in = st.text_input("Password", type="password")
+            u = st.text_input("Usuario")
+            p = st.text_input("Password", type="password")
             if st.button("Entrar"):
                 conf = pd.read_csv(CONFIG_FILE).iloc[0]
-                if u_in == conf['user'] and p_in == str(conf['pass']):
+                if u == conf['user'] and p == str(conf['pass']):
                     st.session_state.admin = True
                     st.rerun()
     else:
-        st.success("Admin Activo")
         if st.button("Cerrar Sesión"):
             st.session_state.admin = False
             st.rerun()
     
     st.divider()
-    # Usamos session_state para el menú para permitir "redirecciones"
-    opciones = ["🏆 Líderes (Top 10)", "📋 Rosters por Equipo", "📊 Estadísticas Totales", "🏘️ Equipos", "✍️ Registrar Datos", "💾 Respaldo"]
-    st.session_state.menu_actual = st.radio("Sección:", opciones, index=opciones.index(st.session_state.menu_actual))
+    menu = st.radio("Ir a:", ["🏆 Líderes (Top 10)", "📋 Rosters", "📊 Estadísticas Totales", "🏘️ Equipos", "✍️ Registrar", "💾 Respaldo"])
 
-# --- 5. LÓGICA DE SECCIONES ---
+# --- 5. DEPARTAMENTOS DE BATEO Y PITCHEO ---
 
-# --- SECCIÓN: ROSTERS (NUEVA) ---
-if st.session_state.menu_actual == "📋 Rosters por Equipo":
-    st.header("👥 Rosters de los Equipos")
-    if df_e.empty:
-        st.info("No hay equipos registrados.")
-    else:
-        # Si venimos de registrar un jugador, seleccionamos su equipo automáticamente
-        default_index = 0
-        if st.session_state.equipo_seleccionado:
-            try:
-                default_index = list(df_e['Nombre']).index(st.session_state.equipo_seleccionado)
-            except: pass
-        
-        eq_ver = st.selectbox("Selecciona un equipo para ver sus jugadores:", df_e['Nombre'], index=default_index)
-        
-        roster = df_j[df_j['Equipo'] == eq_ver]
-        if roster.empty:
-            st.warning(f"El equipo {eq_ver} aún no tiene jugadores registrados.")
-        else:
-            st.subheader(f"Jugadores de {eq_ver} ({len(roster)})")
-            # Mostramos bateo y pitcheo simplificado
-            st.dataframe(roster[["Nombre", "VB", "H", "HR", "G", "P"]], use_container_width=True)
+if menu == "🏆 Líderes (Top 10)":
+    st.header("🔝 Líderes Departamentales")
+    tab_b, tab_p = st.tabs(["⚾ DEPARTAMENTOS BATEO", "🎯 DEPARTAMENTOS PITCHEO"])
+    
+    with tab_b:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Hits")
+            st.table(df_j.nlargest(10, 'H')[['Nombre', 'Equipo', 'H']])
+            st.subheader("Home Runs")
+            st.table(df_j.nlargest(10, 'HR')[['Nombre', 'Equipo', 'HR']])
+        with col2:
+            st.subheader("Dobles (2B)")
+            st.table(df_j.nlargest(10, '2B')[['Nombre', 'Equipo', '2B']])
+            st.subheader("Triples (3B)")
+            st.table(df_j.nlargest(10, '3B')[['Nombre', 'Equipo', '3B']])
 
-# --- SECCIÓN: REGISTRAR (CON REDIRECCIÓN) ---
-elif st.session_state.menu_actual == "✍️ Registrar Datos":
-    if not st.session_state.admin:
-        st.warning("⚠️ Inicia sesión para registrar.")
-    else:
-        st.header("Entrada de Estadísticas")
-        modo = st.radio("Tipo:", ["Bateador", "Pitcher"], horizontal=True)
-        
-        with st.form("registro_form"):
-            nombre_j = st.text_input("Nombre del Jugador")
-            equipo_j = st.selectbox("Equipo", df_e["Nombre"])
-            
-            if modo == "Bateador":
-                c1, c2, c3 = st.columns(3)
-                vbat = c1.number_input("VB", min_value=0, step=1)
-                hits = c2.number_input("Hits", min_value=0, step=1)
-                hr = c3.number_input("HR", min_value=0, step=1)
-                d2, d3, gan, perd = 0, 0, 0, 0
-            else:
-                c1, c2 = st.columns(2)
-                gan = c1.number_input("Ganados (G)", min_value=0, step=1)
-                perd = c2.number_input("Perdidos (P)", min_value=0, step=1)
-                vbat, hits, d2, d3, hr = 0, 0, 0, 0, 0
+    with tab_p:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Juegos Ganados")
+            st.table(df_j.nlargest(10, 'G')[['Nombre', 'Equipo', 'G']])
+        with col2:
+            st.subheader("Juegos Perdidos")
+            st.table(df_j.nlargest(10, 'P')[['Nombre', 'Equipo', 'P']])
 
-            if st.form_submit_button("💾 Guardar y Ver Roster"):
-                if nombre_j:
-                    df_j = df_j[df_j['Nombre'] != nombre_j]
-                    nueva_data = pd.DataFrame([{"Nombre": nombre_j, "Equipo": equipo_j, "VB": vbat, "H": hits, "2B": d2, "3B": d3, "HR": hr, "G": gan, "P": perd}])
-                    df_j = pd.concat([df_j, nueva_data], ignore_index=True)
-                    df_j.to_csv(JUGADORES_FILE, index=False)
-                    
-                    # REDIRECCIÓN:
-                    st.session_state.equipo_seleccionado = equipo_j
-                    st.session_state.menu_actual = "📋 Rosters por Equipo"
-                    st.rerun()
+elif menu == "📋 Rosters":
+    st.header("👥 Rosters por Equipo")
+    eq_sel = st.selectbox("Selecciona Equipo:", df_e["Nombre"])
+    st.dataframe(df_j[df_j["Equipo"] == eq_sel], use_container_width=True)
 
-# --- SECCIONES RESTANTES (RESUMIDAS) ---
-elif st.session_state.menu_actual == "🏆 Líderes (Top 10)":
-    st.header("🥇 Top 10")
-    t1, t2 = st.tabs(["⚾ Bateo", "🎯 Pitcheo"])
-    with t1: st.table(df_j.nlargest(10, 'H')[['Nombre', 'Equipo', 'H']])
-    with t2: st.table(df_j.nlargest(10, 'G')[['Nombre', 'Equipo', 'G']])
-
-elif st.session_state.menu_actual == "📊 Estadísticas Totales":
+elif menu == "📊 Estadísticas Totales":
     st.header("Tablas Completas")
-    df_j['AVG'] = (df_j['H'] / df_j['VB']).fillna(0.000)
-    st.dataframe(df_j.sort_values("AVG", ascending=False), use_container_width=True)
+    t1, t2 = st.tabs(["Bateo", "Pitcheo"])
+    with t1:
+        df_j['AVG'] = (df_j['H'] / df_j['VB']).fillna(0.000)
+        st.dataframe(df_j[["Nombre", "Equipo", "VB", "H", "AVG", "HR"]].sort_values("AVG", ascending=False))
+    with t2:
+        st.dataframe(df_j[["Nombre", "Equipo", "G", "P"]].sort_values("G", ascending=False))
 
-elif st.session_state.menu_actual == "🏘️ Equipos":
-    st.header("Equipos")
+elif menu == "✍️ Registrar":
+    if not st.session_state.admin: st.warning("Inicia sesión")
+    else:
+        st.header("Registrar Estadísticas")
+        tipo = st.radio("Tipo:", ["Bateador", "Pitcher"], horizontal=True)
+        with st.form("reg"):
+            nom = st.text_input("Nombre")
+            eq = st.selectbox("Equipo", df_e["Nombre"])
+            v1, v2, v3 = st.columns(3)
+            if tipo == "Bateador":
+                vb = v1.number_input("VB", min_value=0)
+                h = v2.number_input("H", min_value=0)
+                hr = v3.number_input("HR", min_value=0)
+                g, p = 0, 0
+            else:
+                g = v1.number_input("G", min_value=0)
+                p = v2.number_input("P", min_value=0)
+                vb, h, hr = 0, 0, 0
+            
+            if st.form_submit_button("Guardar"):
+                df_j = df_j[df_j["Nombre"] != nom]
+                nueva = pd.DataFrame([{"Nombre": nom, "Equipo": eq, "VB": vb, "H": h, "2B": 0, "3B": 0, "HR": hr, "G": g, "P": p}])
+                df_j = pd.concat([df_j, nueva], ignore_index=True)
+                df_j.to_csv(JUGADORES_FILE, index=False)
+                st.success("Guardado y redireccionado")
+                st.rerun()
+
+elif menu == "🏘️ Equipos":
     if st.session_state.admin:
-        nuevo = st.text_input("Nombre equipo:")
+        n_eq = st.text_input("Nuevo Equipo")
         if st.button("Añadir"):
-            df_e = pd.concat([df_e, pd.DataFrame([{"Nombre": nuevo}])], ignore_index=True)
+            df_e = pd.concat([df_e, pd.DataFrame([{"Nombre": n_eq}])], ignore_index=True)
             df_e.to_csv(EQUIPOS_FILE, index=False)
             st.rerun()
     st.table(df_e)
 
-elif st.session_state.menu_actual == "💾 Respaldo":
-    st.header("💾 Respaldo")
-    st.download_button("📥 Descargar CSV", df_j.to_csv(index=False).encode('utf-8'), "liga.csv")
-    subido = st.file_uploader("📤 Restaurar", type="csv")
-    if subido:
-        pd.read_csv(subido).to_csv(JUGADORES_FILE, index=False)
-        st.success("Restaurado.")
+elif menu == "💾 Respaldo":
+    st.download_button("Descargar CSV", df_j.to_csv(index=False), "liga.csv")
+    f = st.file_uploader("Subir CSV", type="csv")
+    if f:
+        pd.read_csv(f).to_csv(JUGADORES_FILE, index=False)
         st.rerun()
