@@ -2,117 +2,119 @@ import streamlit as st
 import pandas as pd
 import os
 
-# --- 1. CONFIGURACIÓN DE ARCHIVOS ---
-DATA_DIR = "datos_liga"
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
+# --- 1. CONFIGURACIÓN ---
+DATA_DIR = "datos_liga_pro"
+if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
 
-CONFIG_FILE = os.path.join(DATA_DIR, "config.csv")
 EQUIPOS_FILE = os.path.join(DATA_DIR, "equipos.csv")
 JUGADORES_FILE = os.path.join(DATA_DIR, "jugadores.csv")
+CONFIG_FILE = os.path.join(DATA_DIR, "config.csv")
 
-# --- 2. GESTIÓN DE CREDENCIALES ---
-# Si no existe el archivo de configuración, creamos las credenciales iniciales
+# Credenciales iniciales
 if not os.path.exists(CONFIG_FILE):
-    pd.DataFrame([{"usuario": "admin", "clave": "123"}]).to_csv(CONFIG_FILE, index=False)
+    pd.DataFrame([{"user": "admin", "pass": "123"}]).to_csv(CONFIG_FILE, index=False)
 
-def obtener_credenciales():
-    df_conf = pd.read_csv(CONFIG_FILE)
-    return df_conf.iloc[0]['usuario'], str(df_conf.iloc[0]['clave'])
-
-def actualizar_credenciales(nuevo_u, nueva_c):
-    pd.DataFrame([{"usuario": nuevo_u, "clave": nueva_c}]).to_csv(CONFIG_FILE, index=False)
-
-def cargar_datos(ruta, columnas):
-    if os.path.exists(ruta):
-        return pd.read_csv(ruta)
+# --- 2. FUNCIONES DE DATOS ---
+def cargar_csv(ruta, columnas):
+    if os.path.exists(ruta): return pd.read_csv(ruta)
     return pd.DataFrame(columns=columnas)
 
 # --- 3. ESTADO DE SESIÓN ---
-if 'es_admin' not in st.session_state:
-    st.session_state.es_admin = False
+if 'admin' not in st.session_state: st.session_state.admin = False
 
-ADMIN_USER, ADMIN_PASS = obtener_credenciales()
-df_e = cargar_datos(EQUIPOS_FILE, ["Nombre"])
-df_j = cargar_datos(JUGADORES_FILE, ["Nombre", "Equipo", "VB", "H"])
+df_e = cargar_csv(EQUIPOS_FILE, ["Nombre"])
+# Columnas: Nombre, Equipo, VB, H, 2B, 3B, HR, G (Ganados), P (Perdidos)
+df_j = cargar_csv(JUGADORES_FILE, ["Nombre", "Equipo", "VB", "H", "2B", "3B", "HR", "G", "P"])
 
 # --- 4. BARRA LATERAL ---
 with st.sidebar:
-    st.title("🥎 Liga Softbol")
-    if not st.session_state.es_admin:
-        st.header("🔐 Acceso Admin")
-        u_input = st.text_input("Usuario")
-        p_input = st.text_input("Contraseña", type="password")
-        if st.button("Entrar"):
-            if u_input == ADMIN_USER and p_input == ADMIN_PASS:
-                st.session_state.es_admin = True
+    st.title("🥎 Liga Softbol Pro")
+    if not st.session_state.admin:
+        u = st.text_input("Usuario")
+        p = st.text_input("Password", type="password")
+        if st.button("Login Admin"):
+            conf = pd.read_csv(CONFIG_FILE)
+            if u == conf.iloc[0]['user'] and p == str(conf.iloc[0]['pass']):
+                st.session_state.admin = True
                 st.rerun()
-            else:
-                st.error("Credenciales incorrectas")
     else:
-        st.success(f"Conectado como: {ADMIN_USER}")
+        st.success("Admin Activo")
         if st.button("Cerrar Sesión"):
-            st.session_state.es_admin = False
+            st.session_state.admin = False
             st.rerun()
     
-    st.divider()
-    opciones = ["📊 Estadísticas Públicas"]
-    if st.session_state.es_admin:
-        opciones += ["🏘️ Gestión Equipos", "👤 Registro Jugadores", "🔑 Cambiar Clave", "💾 RESPALDO"]
-    
-    menu = st.radio("Ir a:", opciones)
+    menu = st.radio("Menú", ["🏆 Líderes (Top 10)", "📊 Tabla Completa", "🏘️ Equipos", "👤 Registro/Editar", "💾 Respaldo"])
 
 # --- 5. SECCIONES ---
 
-if menu == "📊 Estadísticas Públicas":
-    st.header("Ranking de Bateo")
-    if not df_j.empty:
-        df_j['AVG'] = (df_j['H'] / df_j['VB']).fillna(0.000)
-        st.dataframe(df_j.sort_values(by="AVG", ascending=False), use_container_width=True)
+if menu == "🏆 Líderes (Top 10)":
+    st.header("🔝 Los 10 Mejores de la Liga")
+    if df_j.empty:
+        st.info("No hay datos suficientes.")
     else:
-        st.info("Aún no hay datos de jugadores.")
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Hits", "2B", "3B", "HR", "Ganados", "Perdidos"])
+        with tab1: st.table(df_j.nlargest(10, 'H')[['Nombre', 'Equipo', 'H']])
+        with tab2: st.table(df_j.nlargest(10, '2B')[['Nombre', 'Equipo', '2B']])
+        with tab3: st.table(df_j.nlargest(10, '3B')[['Nombre', 'Equipo', '3B']])
+        with tab4: st.table(df_j.nlargest(10, 'HR')[['Nombre', 'Equipo', 'HR']])
+        with tab5: st.table(df_j.nlargest(10, 'G')[['Nombre', 'Equipo', 'G']])
+        with tab6: st.table(df_j.nlargest(10, 'P')[['Nombre', 'Equipo', 'P']])
 
-elif menu == "🔑 Cambiar Clave":
-    st.header("Configuración de Seguridad")
-    nuevo_usuario = st.text_input("Nuevo nombre de usuario", value=ADMIN_USER)
-    nueva_clave = st.text_input("Nueva contraseña", type="password")
-    confirmar = st.text_input("Confirmar contraseña", type="password")
+elif menu == "📊 Tabla Completa":
+    st.header("Estadísticas Generales")
+    df_show = df_j.copy()
+    df_show['AVG'] = (df_show['H'] / df_show['VB']).fillna(0.000)
+    st.dataframe(df_show, use_container_width=True)
+
+elif menu == "👤 Registro/Editar":
+    if not st.session_state.admin:
+        st.warning("Acceso solo para administradores.")
+    else:
+        st.header("Añadir o Actualizar Jugador")
+        with st.form("registro"):
+            nombre = st.text_input("Nombre del Jugador")
+            equipo = st.selectbox("Equipo", df_e["Nombre"])
+            c1, c2, c3, c4 = st.columns(4)
+            vb = c1.number_input("VB", min_value=0)
+            h = c2.number_input("Hits", min_value=0)
+            d2 = c3.number_input("2B", min_value=0)
+            d3 = c4.number_input("3B", min_value=0)
+            
+            c5, c6, c7, c8 = st.columns(4)
+            hr = c5.number_input("HR", min_value=0)
+            g = c6.number_input("G (Pitcher)", min_value=0)
+            p = c7.number_input("P (Pitcher)", min_value=0)
+            
+            if st.form_submit_button("Guardar Jugador"):
+                # Si el jugador ya existe, lo actualizamos, si no, lo añadimos
+                df_j = df_j[df_j['Nombre'] != nombre] # Elimina versión vieja si existe
+                nueva_fila = pd.DataFrame([{"Nombre": nombre, "Equipo": equipo, "VB": vb, "H": h, "2B": d2, "3B": d3, "HR": hr, "G": g, "P": p}])
+                df_j = pd.concat([df_j, nueva_fila], ignore_index=True)
+                df_j.to_csv(JUGADORES_FILE, index=False)
+                st.success(f"¡{nombre} actualizado!")
+                st.rerun()
+
+elif menu == "💾 Respaldo":
+    st.header("💾 Centro de Respaldo")
+    # Botón para descargar el archivo actual de la nube
+    csv = df_j.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Descargar CSV de Jugadores", csv, "respaldo_liga.csv", "text/csv")
     
-    if st.button("Actualizar Credenciales"):
-        if nueva_clave == confirmar and nueva_clave != "":
-            actualizar_credenciales(nuevo_usuario, nueva_clave)
-            st.success("¡Credenciales actualizadas! Se cerrará la sesión por seguridad.")
-            st.session_state.es_admin = False
-            st.rerun()
-        else:
-            st.error("Las contraseñas no coinciden o están vacías.")
-
-elif menu == "🏘️ Gestión Equipos":
-    # ... (Mismo código de gestión de equipos anterior)
-    st.header("Equipos")
-    nuevo_eq = st.text_input("Nombre del Equipo")
-    if st.button("Guardar Equipo"):
-        df_e = pd.concat([df_e, pd.DataFrame([{"Nombre": nuevo_eq}])], ignore_index=True)
-        df_e.to_csv(EQUIPOS_FILE, index=False)
-        st.success("Guardado")
+    # Opción para subir un respaldo si se borra la app
+    archivo = st.file_uploader("📤 Restaurar desde archivo CSV", type="csv")
+    if archivo:
+        df_restaurado = pd.read_csv(archivo)
+        df_restaurado.to_csv(JUGADORES_FILE, index=False)
+        st.success("¡Datos restaurados correctamente!")
         st.rerun()
 
-elif menu == "👤 Registro Jugadores":
-    # ... (Mismo código de registro de jugadores anterior)
-    st.header("Nuevo Jugador")
-    with st.form("form_j"):
-        n = st.text_input("Nombre")
-        eq = st.selectbox("Equipo", df_e["Nombre"])
-        v = st.number_input("VB", min_value=0)
-        h = st.number_input("H", min_value=0)
-        if st.form_submit_button("Registrar"):
-            df_j = pd.concat([df_j, pd.DataFrame([{"Nombre": n, "Equipo": eq, "VB": v, "H": h}])], ignore_index=True)
-            df_j.to_csv(JUGADORES_FILE, index=False)
-            st.success("Registrado")
+# --- Gestión de Equipos (Simplificada) ---
+elif menu == "🏘️ Equipos":
+    if not st.session_state.admin: st.warning("Solo Admin")
+    else:
+        eq_n = st.text_input("Nuevo Equipo")
+        if st.button("Añadir"):
+            df_e = pd.concat([df_e, pd.DataFrame([{"Nombre": eq_n}])], ignore_index=True)
+            df_e.to_csv(EQUIPOS_FILE, index=False)
             st.rerun()
-
-elif menu == "💾 RESPALDO":
-    # ... (Sección de respaldo para descargar/subir CSV)
-    st.header("Respaldo")
-    csv = df_j.to_csv(index=False).encode('utf-8')
-    st.download_button("Descargar Respaldo Jugadores", csv, "jugadores.csv", "text/csv")
+        st.table(df_e)
