@@ -68,15 +68,19 @@ with st.sidebar:
 
 if menu == "🏠 INICIO":
     st.header(f"🏠 {NOMBRE_LIGA} - Temporada {ANIO_ACTUAL}")
-    st.write("Seleccione una opción en el menú lateral para comenzar.")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Equipos", len(df_e))
+    col2.metric("Jugadores", len(df_j))
+    col3.metric("Juegos", len(df_g))
 
 elif menu == "📊 STANDING":
-    st.header("📊 Tabla de Posiciones (Standing)")
+    st.header("📊 Tabla de Posiciones")
     if not df_e.empty and not df_g.empty:
         res = []
         for eq in df_e["Nombre"].unique():
             v, h = df_g[df_g["Visitante"]==eq], df_g[df_g["HomeClub"]==eq]
-            g, p = len(v[v["CV"]>v["CH"]]) + len(h[h["CH"]>h["CV"]]), len(v[v["CV"]<v["CH"]]) + len(h[h["CH"]<h["CV"]])
+            g = len(v[v["CV"]>v["CH"]]) + len(h[h["CH"]>h["CV"]])
+            p = len(v[v["CV"]<v["CH"]]) + len(h[h["CH"]<h["CV"]])
             cf, cc = v["CV"].sum() + h["CH"].sum(), v["CH"].sum() + h["CV"].sum()
             res.append({"Equipo": eq, "G": g, "P": p, "AVG": round(g/(g+p),3) if (g+p)>0 else 0, "CF": cf, "CC": cc, "DIF": cf-cc})
         st.table(pd.DataFrame(res).sort_values(by=["AVG", "DIF"], ascending=False))
@@ -84,23 +88,28 @@ elif menu == "📊 STANDING":
 elif menu == "🏆 LÍDERES":
     st.header("🥇 Líderes de la Liga")
     jor_max = df_g["Jornada"].max() if not df_g.empty else 1
-    min_vb = st.sidebar.slider("Min VB (Líderes):", 0, 100, int(jor_max * 3)) if st.session_state.admin else int(jor_max * 3)
-
+    min_vb = st.sidebar.slider("Min VB (Líderes):", 0, 100, int(jor_max * 3))
+    
     df_l = df_j.copy()
     df_l["HT"] = df_l["H"] + df_l["2B"] + df_l["3B"] + df_l["HR"]
+    df_l["TB"] = df_l["VB"] + df_l["BB"]
     df_l["AVG_N"] = (df_l["HT"] / df_l["VB"]).fillna(0)
     
     t_bat, t_pit = st.tabs(["⚾ BATEO", "🎯 PITCHEO"])
     with t_bat:
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.write("### AVG"); l_avg = df_l[df_l["VB"] >= min_vb].nlargest(10, 'AVG_N').copy()
-            l_avg["AVG"] = l_avg["AVG_N"].apply(lambda x: f"{x:.3f}"); st.dataframe(l_avg[['Nombre', 'AVG']], hide_index=True)
-        with c2: st.write("### HT"); st.dataframe(df_l.nlargest(10,'HT')[['Nombre','HT']], hide_index=True)
-        with c3: st.write("### HR"); st.dataframe(df_l.nlargest(10,'HR')[['Nombre','HR']], hide_index=True)
-    with t_pit:
-        st.write("### Pitchers (Ganados)"); solo_p = df_l[(df_l["G"] > 0) | (df_l["P"] > 0)]
-        st.dataframe(solo_p.sort_values(by=["G","P"], ascending=[False, True])[['Nombre','Equipo','G','P']], hide_index=True)
+            st.write("### AVG")
+            # Ordenar por AVG_N y usar TB como desempate
+            l_avg = df_l[df_l["VB"] >= min_vb].sort_values(by=["AVG_N", "TB"], ascending=False).head(10).copy()
+            l_avg["AVG"] = l_avg["AVG_N"].apply(lambda x: f"{x:.3f}")
+            st.dataframe(l_avg[['Nombre', 'AVG', 'TB']], hide_index=True)
+        with c2: 
+            st.write("### HT")
+            st.dataframe(df_l.sort_values(by=["HT", "TB"], ascending=False).head(10)[['Nombre','HT']], hide_index=True)
+        with c3: 
+            st.write("### HR")
+            st.dataframe(df_l.sort_values(by=["HR", "TB"], ascending=False).head(10)[['Nombre','HR']], hide_index=True)
 
 elif menu == "📋 ROSTERS":
     st.header("📋 Rosters Detallados")
@@ -111,9 +120,11 @@ elif menu == "📋 ROSTERS":
         col2.image(logo_url, width=80)
         
         df_r = df_j[df_j["Equipo"] == eq_sel].copy()
-        df_r["HT"] = df_r["H"] + df_r["2B"] + df_r["3B"] + df_r["HR"]
-        df_r["AVG"] = (df_r["HT"] / df_r["VB"]).fillna(0).apply(lambda x: f"{x:.3f}")
-        st.dataframe(df_r[["Nombre", "VB", "H", "2B", "3B", "HR", "BB", "HT", "AVG"]], hide_index=True, use_container_width=True)
+        if not df_r.empty:
+            df_r["HT"] = df_r["H"] + df_r["2B"] + df_r["3B"] + df_r["HR"]
+            df_r["TB"] = df_r["VB"] + df_r["BB"]
+            df_r["AVG"] = (df_r["HT"] / df_r["VB"]).fillna(0).apply(lambda x: f"{x:.3f}")
+            st.dataframe(df_r[["Nombre", "TB", "VB", "H", "2B", "3B", "HR", "BB", "HT", "AVG"]], hide_index=True, use_container_width=True)
 
 elif menu == "📜 HISTORIAL":
     st.header("📜 Ficha de Jugador")
@@ -121,17 +132,16 @@ elif menu == "📜 HISTORIAL":
         js = st.selectbox("Buscar:", sorted(df_j["Nombre"].unique()))
         d = df_j[df_j["Nombre"]==js].iloc[0]
         c1, c2, c3 = st.columns(3)
-        c1.metric("Equipo", d['Equipo']); c2.metric("VB", int(d['VB'])); c3.metric("AVG", f"{((d['H']+d['2B']+d['3B']+d['HR'])/d['VB'] if d['VB']>0 else 0):.3f}")
-        st.write(f"**Bateo:** H: {int(d['H'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])} | HR: {int(d['HR'])} | BB: {int(d['BB'])}")
-        st.write(f"**Picheo:** G: {int(d['G'])} | P: {int(d['P'])}")
+        c1.metric("Equipo", d['Equipo'])
+        c2.metric("Turnos Totales (TB)", int(d['VB'] + d['BB']))
+        c3.metric("AVG", f"{((d['H']+d['2B']+d['3B']+d['HR'])/d['VB'] if d['VB']>0 else 0):.3f}")
+        st.write(f"**Bateo:** VB: {int(d['VB'])} | H: {int(d['H'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])} | HR: {int(d['HR'])} | BB: {int(d['BB'])}")
+        st.write(f"**Picheo:** Ganados: {int(d['G'])} | Perdidos: {int(d['P'])}")
 
 elif menu == "🏘️ EQUIPOS":
-    st.header("🏘️ Gestión de Equipos")
     if st.session_state.admin:
         t_l, t_n, t_e = st.tabs(["LISTA", "NUEVO", "EDITAR"])
-        with t_l: 
-            df_ee = df_e.copy(); df_ee["Antigüedad"] = ANIO_ACTUAL - df_ee["Debut"]
-            st.dataframe(df_ee[["Nombre", "Debut", "Antigüedad", "Logo"]], hide_index=True)
+        with t_l: st.dataframe(df_e, hide_index=True)
         with t_n:
             with st.form("n_e"):
                 n, d, l = st.text_input("Nombre"), st.number_input("Debut", 1980, 2026, 2026), st.text_input("Logo URL", LOGO_DEFECTO)
@@ -152,37 +162,35 @@ elif menu == "✍️ REGISTRAR":
         tj, tr = st.tabs(["👤 JUGADORES", "⚾ RESULTADOS"])
         with tj:
             with st.form("rj"):
-                n, e = st.text_input("Nombre"), st.selectbox("Equipo", df_e["Nombre"].unique()) if not df_e.empty else st.info("Cree un equipo primero")
+                n = st.text_input("Nombre Jugador")
+                e = st.selectbox("Equipo", df_e["Nombre"].unique()) if not df_e.empty else ""
                 v1, v2, v3 = st.columns(3)
-                vb, h, bb = v1.number_input("AB (Turnos)", 0), v2.number_input("H (Sencillos)", 0), v3.number_input("BB", 0)
+                vb, h, bb = v1.number_input("VB", 0), v2.number_input("H (Sencillos)", 0), v3.number_input("BB", 0)
                 d2, d3, hr = v1.number_input("2B", 0), v2.number_input("3B", 0), v3.number_input("HR", 0)
-                g, p = v1.number_input("G (Picheo)",0), v2.number_input("P (Picheo)",0)
+                pg, pp = v1.number_input("G (Picheo)", 0), v2.number_input("P (Picheo)", 0)
                 if st.form_submit_button("Guardar Jugador"):
-                    df_j = pd.concat([df_j[df_j["Nombre"]!=n], pd.DataFrame([{"Nombre":n,"Equipo":e,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr,"BB":bb,"G":g,"P":p}])], ignore_index=True)
-                    df_j.to_csv(J_FILE, index=False); st.success("Jugador Guardado"); st.rerun()
+                    df_j = pd.concat([df_j[df_j["Nombre"]!=n], pd.DataFrame([{"Nombre":n,"Equipo":e,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr,"BB":bb,"G":pg,"P":pp}])], ignore_index=True)
+                    df_j.to_csv(J_FILE, index=False); st.success("Guardado"); st.rerun()
         with tr:
             with st.form("rs"):
-                j = st.number_input("Jornada",1)
+                j = st.number_input("Jornada", 1)
                 v = st.selectbox("Visitante", df_e["Nombre"].unique()) if not df_e.empty else ""
-                cv = st.number_input("Carreras Visitante",0)
+                cv = st.number_input("Carreras Vis", 0)
                 hc = st.selectbox("Home Club", df_e["Nombre"].unique()) if not df_e.empty else ""
-                ch = st.number_input("Carreras Home Club",0)
+                ch = st.number_input("Carreras HC", 0)
                 if st.form_submit_button("Guardar Score"):
-                    pd.concat([df_g, pd.DataFrame([{"Jornada":j,"Visitante":v,"CV":cv,"HomeClub":hc,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.success("Score Guardado"); st.rerun()
+                    pd.concat([df_g, pd.DataFrame([{"Jornada":j,"Visitante":v,"CV":cv,"HomeClub":hc,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.success("Juego registrado"); st.rerun()
 
 elif menu == "🗑️ BORRAR":
     if st.session_state.admin:
         st.header("🗑️ Borrar Jugador")
         if not df_j.empty:
-            sel = st.selectbox("Seleccionar Jugador para eliminar:", sorted(df_j["Nombre"].unique()))
-            if st.button("Confirmar Eliminación", type="primary"):
-                df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False)
-                st.success(f"{sel} eliminado"); st.rerun()
-        else:
-            st.info("No hay jugadores registrados.")
+            sel = st.selectbox("Seleccionar Jugador:", sorted(df_j["Nombre"].unique()))
+            if st.button("Confirmar Borrado", type="primary"):
+                df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False); st.rerun()
 
 elif menu == "💾 RESPALDO":
     if st.session_state.admin:
-        st.header("💾 Descarga de Respaldos")
-        st.download_button("Descargar CSV Jugadores", df_j.to_csv(index=False), "jugadores.csv", "text/csv")
-        st.download_button("Descargar CSV Resultados", df_g.to_csv(index=False), "resultados.csv", "text/csv")
+        st.header("💾 Descargar Datos")
+        st.download_button("Descargar CSV Jugadores", df_j.to_csv(index=False), "jugadores.csv")
+        st.download_button("Descargar CSV Resultados", df_g.to_csv(index=False), "resultados.csv")
