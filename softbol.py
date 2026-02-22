@@ -68,7 +68,6 @@ if menu == "🏠 INICIO":
     st.divider()
     c1, c2, c3 = st.columns(3)
     c1.metric("Equipos", len(df_e)); c2.metric("Jugadores", len(df_j)); c3.metric("Juegos Jugados", len(df_g))
-    
     st.subheader("📅 Próximos Encuentros")
     if not df_p.empty: st.table(df_p)
     else: st.info("No hay juegos programados.")
@@ -133,8 +132,10 @@ elif menu == "📋 ROSTERS":
     if not df_e.empty:
         c1, c2 = st.columns(2)
         eq_sel = c1.selectbox("Equipo:", df_e["Nombre"].unique())
-        logo = df_e[df_e["Nombre"] == eq_sel]["Logo"].iloc if not df_e[df_e["Nombre"] == eq_sel].empty else LOGO_DEFECTO
-        c2.image(logo, width=80)
+        # CORRECCIÓN AQUÍ: Asegurar que extraemos solo el valor de texto del logo
+        logo_data = df_e[df_e["Nombre"] == eq_sel]["Logo"]
+        logo_url = logo_data.values[0] if not logo_data.empty else LOGO_DEFECTO
+        c2.image(logo_url, width=80)
         df_r = df_j[df_j["Equipo"] == eq_sel].copy()
         if not df_r.empty:
             df_r["HT"] = df_r["H"] + df_r["2B"] + df_r["3B"] + df_r["HR"]
@@ -164,29 +165,18 @@ elif menu == "✍️ REGISTRAR" and st.session_state.admin:
                 pd.concat([df_g, pd.DataFrame([{"Jornada":jor,"Visitante":v,"CV":cv,"HomeClub":h,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.rerun()
 
 elif menu == "💾 RESPALDO" and st.session_state.admin:
-    st.header("💾 Control de Temporada")
-    
-    with st.expander("🧨 ZONA DE PELIGRO - NUEVA TEMPORADA"):
-        st.error("Esto borrará jugadores, juegos y programación.")
-        confirmacion = st.text_input("Escriba 'RESET2026' para confirmar el borrado:")
-        if st.button("BORRAR TODO DEFINITIVAMENTE"):
+    st.header("💾 Control de Datos")
+    with st.expander("🧨 NUEVA TEMPORADA"):
+        confirmacion = st.text_input("Escriba 'RESET2026' para confirmar:")
+        if st.button("BORRAR TODO"):
             if confirmacion == "RESET2026":
-                for f in [J_FILE, G_FILE, P_FILE]: # Nota: Conservamos Equipos si quieres, o añádelo a la lista para borrar todo
+                for f in [J_FILE, G_FILE, P_FILE]:
                     if os.path.exists(f): os.remove(f)
-                st.success("Temporada reseteada. Recargue la aplicación."); st.rerun()
-            else:
-                st.warning("Palabra de confirmación incorrecta.")
-    
+                st.success("Reseteado."); st.rerun()
     st.divider()
-    st.subheader("📥 Restaurar Datos")
     arc = st.file_uploader("Subir CSV", type="csv")
-    tipo = st.selectbox("Tipo de archivo:", ["Jugadores", "Equipos", "Juegos", "Programacion"])
-    if arc and st.button("Restaurar Seleccionado"):
+    tipo = st.selectbox("Tipo:", ["Jugadores", "Equipos", "Juegos", "Programacion"])
+    if arc and st.button("Restaurar"):
         dest = {"Jugadores": J_FILE, "Equipos": E_FILE, "Juegos": G_FILE, "Programacion": P_FILE}
         pd.read_csv(arc).to_csv(dest[tipo], index=False); st.success("OK"); st.rerun()
-    
-    st.divider()
-    st.subheader("📤 Descargar Copias de Seguridad")
-    st.download_button("📥 Jugadores", df_j.to_csv(index=False), "jugadores.csv")
-    st.download_button("📥 Equipos", df_e.to_csv(index=False), "equipos.csv")
-    st.download_button("📥 Calendario", df_p.to_csv(index=False), "programacion.csv")
+    st.download_button("Descargar Jugadores", df_j.to_csv(index=False), "jugadores.csv")
