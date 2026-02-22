@@ -28,7 +28,12 @@ def cargar_csv(archivo, columnas):
         except: return pd.DataFrame(columns=columnas)
     return pd.DataFrame(columns=columnas)
 
-# --- 3. BARRA LATERAL (ADMIN + CARGA DE ARCHIVOS) ---
+# Carga de datos inicial
+df_j = cargar_csv(J_FILE, ["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "BB", "G", "P"])
+df_e = cargar_csv(E_FILE, ["Nombre", "Debut", "Logo"])
+df_g = cargar_csv(G_FILE, ["Jornada", "Visitante", "CV", "HomeClub", "CH"])
+
+# --- 3. BARRA LATERAL ---
 with st.sidebar:
     st.image(LOGO_DEFECTO, width=100)
     st.title(f"🏆 {NOMBRE_LIGA}")
@@ -59,14 +64,13 @@ with st.sidebar:
     st.divider()
     menu = st.radio("Secciones:", ["🏠 INICIO", "📊 STANDING", "🏆 LÍDERES", "📋 ROSTERS", "📜 HISTORIAL", "🏘️ EQUIPOS", "✍️ REGISTRAR", "🗑️ BORRAR", "💾 RESPALDO"])
 
-# Carga de datos inicial
-df_j = cargar_csv(J_FILE, ["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "BB", "G", "P"])
-df_e = cargar_csv(E_FILE, ["Nombre", "Debut", "Logo"])
-df_g = cargar_csv(G_FILE, ["Jornada", "Visitante", "CV", "HomeClub", "CH"])
-
 # --- 4. SECCIONES ---
 
-if menu == "📊 STANDING":
+if menu == "🏠 INICIO":
+    st.header(f"🏠 {NOMBRE_LIGA} - Temporada {ANIO_ACTUAL}")
+    st.write("Seleccione una opción en el menú lateral para comenzar.")
+
+elif menu == "📊 STANDING":
     st.header("📊 Tabla de Posiciones (Standing)")
     if not df_e.empty and not df_g.empty:
         res = []
@@ -94,10 +98,6 @@ elif menu == "🏆 LÍDERES":
             l_avg["AVG"] = l_avg["AVG_N"].apply(lambda x: f"{x:.3f}"); st.dataframe(l_avg[['Nombre', 'AVG']], hide_index=True)
         with c2: st.write("### HT"); st.dataframe(df_l.nlargest(10,'HT')[['Nombre','HT']], hide_index=True)
         with c3: st.write("### HR"); st.dataframe(df_l.nlargest(10,'HR')[['Nombre','HR']], hide_index=True)
-        st.divider()
-        c4, c5 = st.columns(2)
-        with c4: st.write("### 2B"); st.dataframe(df_l.nlargest(10,'2B')[['Nombre','2B']], hide_index=True)
-        with c5: st.write("### 3B"); st.dataframe(df_l.nlargest(10,'3B')[['Nombre','3B']], hide_index=True)
     with t_pit:
         st.write("### Pitchers (Ganados)"); solo_p = df_l[(df_l["G"] > 0) | (df_l["P"] > 0)]
         st.dataframe(solo_p.sort_values(by=["G","P"], ascending=[False, True])[['Nombre','Equipo','G','P']], hide_index=True)
@@ -107,16 +107,13 @@ elif menu == "📋 ROSTERS":
     if not df_e.empty:
         col1, col2 = st.columns([3,1])
         eq_sel = col1.selectbox("Equipo:", df_e["Nombre"].unique())
-        # CORRECCIÓN DE ERROR: Usar .iloc[0] para asegurar una sola URL
         logo_url = df_e[df_e["Nombre"] == eq_sel]["Logo"].iloc[0]
         col2.image(logo_url, width=80)
         
         df_r = df_j[df_j["Equipo"] == eq_sel].copy()
-        df_r["AB"] = df_r["VB"]
         df_r["HT"] = df_r["H"] + df_r["2B"] + df_r["3B"] + df_r["HR"]
-        df_r["TB"] = df_r["BB"] + df_r["AB"]
-        df_r["AVG"] = (df_r["HT"] / df_r["AB"]).fillna(0).apply(lambda x: f"{x:.3f}")
-        st.dataframe(df_r[["Nombre", "TB", "AB", "H", "2B", "3B", "HR", "BB", "HT", "AVG"]], hide_index=True, use_container_width=True)
+        df_r["AVG"] = (df_r["HT"] / df_r["VB"]).fillna(0).apply(lambda x: f"{x:.3f}")
+        st.dataframe(df_r[["Nombre", "VB", "H", "2B", "3B", "HR", "BB", "HT", "AVG"]], hide_index=True, use_container_width=True)
 
 elif menu == "📜 HISTORIAL":
     st.header("📜 Ficha de Jugador")
@@ -162,20 +159,30 @@ elif menu == "✍️ REGISTRAR":
                 g, p = v1.number_input("G (Picheo)",0), v2.number_input("P (Picheo)",0)
                 if st.form_submit_button("Guardar Jugador"):
                     df_j = pd.concat([df_j[df_j["Nombre"]!=n], pd.DataFrame([{"Nombre":n,"Equipo":e,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr,"BB":bb,"G":g,"P":p}])], ignore_index=True)
-                    df_j.to_csv(J_FILE, index=False); st.rerun()
+                    df_j.to_csv(J_FILE, index=False); st.success("Jugador Guardado"); st.rerun()
         with tr:
             with st.form("rs"):
-                j, v, cv = st.number_input("Jornada",1), st.selectbox("Vis", df_e["Nombre"].unique()) if not df_e.empty else "", st.number_input("Carreras Vis",0)
-                hc, ch = st.selectbox("HC", df_e["Nombre"].unique()) if not df_e.empty else "", st.number_input("Carreras HC",0)
+                j = st.number_input("Jornada",1)
+                v = st.selectbox("Visitante", df_e["Nombre"].unique()) if not df_e.empty else ""
+                cv = st.number_input("Carreras Visitante",0)
+                hc = st.selectbox("Home Club", df_e["Nombre"].unique()) if not df_e.empty else ""
+                ch = st.number_input("Carreras Home Club",0)
                 if st.form_submit_button("Guardar Score"):
-                    pd.concat([df_g, pd.DataFrame([{"Jornada":j,"Visitante":v,"CV":cv,"HomeClub":hc,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.rerun()
+                    pd.concat([df_g, pd.DataFrame([{"Jornada":j,"Visitante":v,"CV":cv,"HomeClub":hc,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.success("Score Guardado"); st.rerun()
 
 elif menu == "🗑️ BORRAR":
     if st.session_state.admin:
-        sel = st.selectbox("Borrar Jugador:", sorted(df_j["Nombre"].unique()))
-        if st.button("Confirmar", type="primary"):
-            df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False); st.rerun()
+        st.header("🗑️ Borrar Jugador")
+        if not df_j.empty:
+            sel = st.selectbox("Seleccionar Jugador para eliminar:", sorted(df_j["Nombre"].unique()))
+            if st.button("Confirmar Eliminación", type="primary"):
+                df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False)
+                st.success(f"{sel} eliminado"); st.rerun()
+        else:
+            st.info("No hay jugadores registrados.")
 
 elif menu == "💾 RESPALDO":
     if st.session_state.admin:
-        st.download_button("Descargar CSV Jugadores", df_j.to_csv(index=False), "jugadores.csv")
+        st.header("💾 Descarga de Respaldos")
+        st.download_button("Descargar CSV Jugadores", df_j.to_csv(index=False), "jugadores.csv", "text/csv")
+        st.download_button("Descargar CSV Resultados", df_g.to_csv(index=False), "resultados.csv", "text/csv")
