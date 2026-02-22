@@ -89,12 +89,12 @@ elif menu == "🏆 LÍDERES":
         with c1:
             st.write("### AVG")
             l_avg = df_l[df_l["VB"] >= min_vb].sort_values(by=["AVG_N", "TB"], ascending=False).head(10)
-            st.dataframe(l_avg[['Nombre']].assign(AVG=l_avg["AVG_N"].map('{:.3f}'.format)), hide_index=True)
-        with c2: st.write("### HT"); st.dataframe(df_l.sort_values(by=["HT","TB"], ascending=False).head(10)[['Nombre','HT']], hide_index=True)
-        with c3: st.write("### HR"); st.dataframe(df_l.sort_values(by=["HR","TB"], ascending=False).head(10)[['Nombre','HR']], hide_index=True)
+            st.dataframe(l_avg[['Nombre', 'Equipo']].assign(AVG=l_avg["AVG_N"].map('{:.3f}'.format)), hide_index=True)
+        with c2: st.write("### HT"); st.dataframe(df_l.sort_values(by=["HT","TB"], ascending=False).head(10)[['Nombre','Equipo','HT']], hide_index=True)
+        with c3: st.write("### HR"); st.dataframe(df_l.sort_values(by=["HR","TB"], ascending=False).head(10)[['Nombre','Equipo','HR']], hide_index=True)
         c4, c5 = st.columns(2)
-        with c4: st.write("### 2B"); st.dataframe(df_l.sort_values(by=["2B","TB"], ascending=False).head(10)[['Nombre','2B']], hide_index=True)
-        with c5: st.write("### 3B"); st.dataframe(df_l.sort_values(by=["3B","TB"], ascending=False).head(10)[['Nombre','3B']], hide_index=True)
+        with c4: st.write("### 2B"); st.dataframe(df_l.sort_values(by=["2B","TB"], ascending=False).head(10)[['Nombre','Equipo','2B']], hide_index=True)
+        with c5: st.write("### 3B"); st.dataframe(df_l.sort_values(by=["3B","TB"], ascending=False).head(10)[['Nombre','Equipo','3B']], hide_index=True)
     with t2:
         st.write("### Líderes Pitcheo")
         df_p = df_j[df_j["IP"] >= min_ip].sort_values(by=["G", "JI"], ascending=False).head(10)
@@ -103,7 +103,7 @@ elif menu == "🏆 LÍDERES":
 elif menu == "📋 ROSTERS":
     st.header("📋 Rosters")
     if not df_e.empty:
-        c1, c2 = st.columns([3,1])
+        c1, c2 = st.columns()
         eq_sel = c1.selectbox("Equipo:", df_e["Nombre"].unique())
         logo_row = df_e[df_e["Nombre"] == eq_sel]
         c2.image(logo_row["Logo"].iloc[0] if not logo_row.empty else LOGO_DEFECTO, width=80)
@@ -140,11 +140,11 @@ elif menu == "🏘️ EQUIPOS":
         with t_e:
             if not df_e.empty:
                 sel = st.selectbox("Editar:", df_e["Nombre"].unique())
-                idx = df_e[df_e["Nombre"] == sel].index[0]
+                idx = df_e[df_e["Nombre"] == sel].index
                 with st.form("e_eq"):
-                    en, el = st.text_input("Nombre", df_e.at[idx, "Nombre"]), st.text_input("Logo URL", df_e.at[idx, "Logo"])
+                    en, el = st.text_input("Nombre", df_e.at[idx[0], "Nombre"]), st.text_input("Logo URL", df_e.at[idx[0], "Logo"])
                     if st.form_submit_button("Actualizar"):
-                        df_e.at[idx, "Nombre"], df_e.at[idx, "Logo"] = en, el
+                        df_e.at[idx[0], "Nombre"], df_e.at[idx[0], "Logo"] = en, el
                         df_e.to_csv(E_FILE, index=False); st.rerun()
     st.dataframe(df_e, hide_index=True)
 
