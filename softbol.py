@@ -68,7 +68,9 @@ if menu == "🏠 INICIO":
     st.header(f"🏆 {ESLOGAN} - {ANIO_ACTUAL}")
     st.divider()
     c1, c2, c3 = st.columns(3)
-    c1.metric("Equipos", len(df_e)); c2.metric("Jugadores", len(df_j)); c3.metric("Juegos Jugados", len(df_g))
+    c1.metric("Equipos", len(df_e))
+    c2.metric("Jugadores", len(df_j))
+    c3.metric("Juegos Jugados", len(df_g))
     st.image("https://images.unsplash.com", use_container_width=True)
 
 elif menu == "📅 PROGRAMACIÓN":
@@ -76,19 +78,29 @@ elif menu == "📅 PROGRAMACIÓN":
     if st.session_state.admin:
         with st.expander("➕ Añadir/Editar Calendario"):
             with st.form("f_prog"):
-                f, h = st.text_input("Fecha"), st.text_input("Hora")
+                f = st.text_input("Fecha")
+                h = st.text_input("Hora")
                 v = st.selectbox("Visitante", df_e["Nombre"].unique()) if not df_e.empty else ""
                 hc = st.selectbox("Home Club", df_e["Nombre"].unique()) if not df_e.empty else ""
                 cam = st.text_input("Campo", "Principal")
                 if st.form_submit_button("Programar"):
                     new_p = pd.DataFrame([{"Fecha":f,"Hora":h,"Visitante":v,"HomeClub":hc,"Campo":cam}])
                     df_p = pd.concat([df_p, new_p], ignore_index=True)
-                    df_p.to_csv(P_FILE, index=False); st.rerun()
+                    df_p.to_csv(P_FILE, index=False)
+                    st.rerun()
+        
         if not df_p.empty:
             sel_p = st.selectbox("Borrar juego:", df_p.index, format_func=lambda x: f"{df_p.at[x,'Visitante']} vs {df_p.at[x,'HomeClub']}")
             if st.button("Eliminar Seleccionado"):
-                df_p.drop(sel_p).to_csv(P_FILE, index=False); st.rerun()
-    st.table(df_p) if not df_p.empty else st.info("No hay programación.")
+                df_p = df_p.drop(sel_p)
+                df_p.to_csv(P_FILE, index=False)
+                st.rerun()
+
+    st.divider()
+    if not df_p.empty:
+        st.table(df_p)
+    else:
+        st.info("No hay programación de juegos disponible.")
 
 elif menu == "📊 STANDING":
     st.header("📊 Tabla de Posiciones")
@@ -168,7 +180,9 @@ elif menu == "✍️ REGISTRAR" and st.session_state.admin:
     t1, t2 = st.tabs(["👤 JUGADOR", "⚾ RESULTADO"])
     with t1:
         with st.form("rj"):
-            n, eq, cat = st.text_input("Nombre"), st.selectbox("Equipo", df_e["Nombre"].unique() if not df_e.empty else [""]), st.text_input("Cat")
+            n = st.text_input("Nombre")
+            eq = st.selectbox("Equipo", df_e["Nombre"].unique()) if not df_e.empty else ""
+            cat = st.text_input("Cat")
             c1, c2, c3 = st.columns(3)
             vb, h, bb = c1.number_input("VB",0), c2.number_input("H",0), c3.number_input("BB",0)
             h2, h3, hr = c1.number_input("2B",0), c2.number_input("3B",0), c3.number_input("HR",0)
@@ -181,15 +195,20 @@ elif menu == "✍️ REGISTRAR" and st.session_state.admin:
                 df_j.to_csv(J_FILE, index=False); st.success("Guardado"); st.rerun()
     with t2:
         with st.form("rg"):
-            jor, v, cv = st.number_input("Jor",1), st.selectbox("Vis", df_e["Nombre"].unique() if not df_e.empty else [""]), st.number_input("C.V",0)
-            h, ch = st.selectbox("Home", df_e["Nombre"].unique() if not df_e.empty else [""]), st.number_input("C.H",0)
-            if st.form_submit_button("Guardar"):
+            jor = st.number_input("Jor",1)
+            v = st.selectbox("Vis", df_e["Nombre"].unique()) if not df_e.empty else ""
+            cv = st.number_input("C.V",0)
+            h = st.selectbox("Home", df_e["Nombre"].unique()) if not df_e.empty else ""
+            ch = st.number_input("C.H",0)
+            if st.form_submit_button("Guardar Resultado"):
                 pd.concat([df_g, pd.DataFrame([{"Jornada":jor,"Visitante":v,"CV":cv,"HomeClub":h,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.rerun()
 
 elif menu == "🗑️ BORRAR" and st.session_state.admin:
     sel = st.selectbox("Borrar:", sorted(df_j["Nombre"].unique()) if not df_j.empty else [""])
-    if st.button("ELIMINAR"):
-        df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False); st.rerun()
+    if st.button("ELIMINAR JUGADOR"):
+        df_j = df_j[df_j["Nombre"]!=sel]
+        df_j.to_csv(J_FILE, index=False)
+        st.rerun()
 
 elif menu == "💾 RESPALDO" and st.session_state.admin:
     st.download_button("Descargar Jugadores", df_j.to_csv(index=False), "jugadores.csv")
