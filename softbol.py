@@ -99,7 +99,6 @@ elif menu == "📊 STANDING":
 elif menu == "🏆 LÍDERES":
     st.header("🥇 Líderes de la Temporada")
     
-    # --- AJUSTES DINÁMICOS POR ADMIN ---
     jor_max = df_g["Jornada"].max() if not df_g.empty else 1
     if st.session_state.admin:
         with st.expander("⚙️ CRITERIOS DE CLASIFICACIÓN (Solo Admin)"):
@@ -113,12 +112,12 @@ elif menu == "🏆 LÍDERES":
     cat = st.selectbox("Categoría:", ["TODOS", "Novato", "Softbolista", "Refuerzo"])
     df_l = df_j.copy() if cat=="TODOS" else df_j[df_j["Categoria"]==cat].copy()
     
-    # Cálculo AVG (H/VB)
     df_l["AVG_N"] = (df_l["H"] / df_l["VB"]).fillna(0)
     df_l["AVG_S"] = df_l["AVG_N"].apply(lambda x: f"{x:.3f}")
 
     tb, tp = st.tabs(["⚾ BATEO", "🎯 PITCHEO"])
     with tb:
+        # FILA 1: AVG, Hits y HR
         c1, c2, c3 = st.columns(3)
         with c1:
             st.write("### Average (H/VB)")
@@ -127,6 +126,16 @@ elif menu == "🏆 LÍDERES":
             st.write("### Hits"); st.dataframe(df_l.nlargest(10,'H')[['Nombre','H']], hide_index=True)
         with c3:
             st.write("### HR"); st.dataframe(df_l.nlargest(10,'HR')[['Nombre','HR']], hide_index=True)
+        
+        st.divider()
+        
+        # FILA 2: Dobles y Triples (RESTAURADOS)
+        c4, c5 = st.columns(2)
+        with c4:
+            st.write("### Dobles (2B)"); st.dataframe(df_l.nlargest(10,'2B')[['Nombre','2B']], hide_index=True)
+        with c5:
+            st.write("### Triples (3B)"); st.dataframe(df_l.nlargest(10,'3B')[['Nombre','3B']], hide_index=True)
+            
     with tp:
         st.write(f"### Pitchers Decididos (Min {min_dec} G+P)")
         solo_p = df_l[(df_l["G"] + df_l["P"]) >= min_dec]
@@ -143,11 +152,11 @@ elif menu == "📜 HISTORIAL":
     st.header("📜 Ficha Técnica")
     if not df_j.empty:
         js = st.selectbox("Buscar Jugador:", sorted(df_j["Nombre"].unique()))
-        d = df_j[df_j["Nombre"]==js].iloc[0]
+        d = df_j[df_j["Nombre"]==js].iloc
         c1, c2, c3 = st.columns(3)
         calc_avg = d['H']/d['VB'] if d['VB']>0 else 0
         c1.metric("Equipo", d['Equipo']); c2.metric("Cat", d['Categoria']); c3.metric("AVG", f"{calc_avg:.3f}")
-        st.write(f"**Bateo:** VB: {int(d['VB'])} | H: {int(d['H'])} | HR: {int(d['HR'])} | 2B: {int(d['2B'])}")
+        st.write(f"**Bateo:** VB: {int(d['VB'])} | H: {int(d['H'])} | HR: {int(d['HR'])} | 2B: {int(d['2B'])} | 3B: {int(d['3B'])}")
         st.write(f"**Picheo:** G: {int(d['G'])} | P: {int(d['P'])}")
 
 elif menu == "🏘️ EQUIPOS":
@@ -181,16 +190,15 @@ elif menu == "✍️ REGISTRAR":
                 hc, ch = st.selectbox("HC", df_e["Nombre"].unique()), st.number_input("CH",0)
                 if st.form_submit_button("Guardar Score"):
                     pd.concat([df_g, pd.DataFrame([{"Jornada":j,"Visitante":v,"CV":cv,"HomeClub":hc,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.rerun()
-    else: st.warning("Admin requerido.")
 
 elif menu == "🗑️ BORRAR":
     if st.session_state.admin:
         st.header("🗑️ Borrar Jugador")
-        sel = st.selectbox("Seleccione:", sorted(df_j["Nombre"].unique()))
-        if st.button("❌ Eliminar Permanentemente", type="primary"):
-            df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False); st.rerun()
+        if not df_j.empty:
+            sel = st.selectbox("Seleccione:", sorted(df_j["Nombre"].unique()))
+            if st.button("❌ Eliminar Permanentemente", type="primary"):
+                df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False); st.rerun()
 
 elif menu == "💾 RESPALDO":
     if st.session_state.admin:
         st.download_button("Descargar Jugadores CSV", df_j.to_csv(index=False), "jugadores.csv")
-        st.download_button("Descargar Resultados CSV", df_g.to_csv(index=False), "resultados.csv")
