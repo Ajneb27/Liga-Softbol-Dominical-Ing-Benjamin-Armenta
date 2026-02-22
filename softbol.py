@@ -32,7 +32,6 @@ def cargar_csv(archivo, columnas):
 with st.sidebar:
     st.image(LOGO_DEFECTO, width=100)
     st.title(f"🏆 {NOMBRE_LIGA}")
-    
     if 'admin' not in st.session_state: st.session_state.admin = False
 
     if not st.session_state.admin:
@@ -52,103 +51,92 @@ with st.sidebar:
     st.divider()
     menu = st.radio("Secciones:", ["🏠 INICIO", "📊 STANDING", "🏆 LÍDERES", "📋 ROSTERS", "📜 HISTORIAL", "🏘️ EQUIPOS", "✍️ REGISTRAR", "🗑️ BORRAR", "💾 RESPALDO"])
 
-# Carga de datos con columna Logo
+# Carga de datos
 df_j = cargar_csv(J_FILE, ["Nombre", "Equipo", "Categoria", "VB", "H", "2B", "3B", "HR", "BB", "G", "P"])
 df_e = cargar_csv(E_FILE, ["Nombre", "Debut", "Logo"])
 df_g = cargar_csv(G_FILE, ["Jornada", "Visitante", "CV", "HomeClub", "CH"])
 
 # --- 4. SECCIONES ---
 
-if menu == "🏘️ EQUIPOS":
-    st.header("🏘️ Gestión de Equipos")
-    
-    if st.session_state.admin:
-        t_ver, t_nuevo, t_edit = st.tabs(["📋 LISTA", "➕ NUEVO", "✏️ EDITAR"])
-        
-        with t_ver:
-            st.dataframe(df_e, hide_index=True, use_container_width=True)
-            
-        with t_nuevo:
-            with st.form("n_e"):
-                n = st.text_input("Nombre del Equipo")
-                d = st.number_input("Año de Debut", 1980, ANIO_ACTUAL, ANIO_ACTUAL)
-                l = st.text_input("URL del Logo (Link de imagen)", LOGO_DEFECTO)
-                if st.form_submit_button("Registrar Equipo"):
-                    if n:
-                        nuevo = pd.DataFrame([{"Nombre":n, "Debut":d, "Logo":l}])
-                        pd.concat([df_e, nuevo], ignore_index=True).to_csv(E_FILE, index=False)
-                        st.success(f"Equipo {n} creado."); st.rerun()
-        
-        with t_edit:
-            if not df_e.empty:
-                eq_edit = st.selectbox("Seleccione equipo a editar:", df_e["Nombre"].unique())
-                idx = df_e[df_e["Nombre"] == eq_edit].index[0]
-                
-                with st.form("f_edit"):
-                    en = st.text_input("Nombre", df_e.at[idx, "Nombre"])
-                    ed = st.number_input("Debut", 1980, ANIO_ACTUAL, int(df_e.at[idx, "Debut"]))
-                    el = st.text_input("URL Logo", df_e.at[idx, "Logo"])
-                    if st.form_submit_button("Guardar Cambios"):
-                        df_e.at[idx, "Nombre"] = en
-                        df_e.at[idx, "Debut"] = ed
-                        df_e.at[idx, "Logo"] = el
-                        df_e.to_csv(E_FILE, index=False)
-                        st.success("Cambios guardados"); st.rerun()
-            else: st.info("No hay equipos para editar.")
-    else:
-        st.dataframe(df_e[["Nombre", "Debut"]], hide_index=True, use_container_width=True)
-
-elif menu == "📋 ROSTERS":
-    st.header("📋 Rosters de Equipos")
-    if not df_e.empty:
-        col_sel, col_logo = st.columns([3, 1])
-        with col_sel:
-            eq_sel = st.selectbox("Seleccione un Equipo:", df_e["Nombre"].unique())
-        
-        # Mostrar Logo del equipo
-        logo_url = df_e[df_e["Nombre"] == eq_sel]["Logo"].values[0]
-        with col_logo:
-            st.image(logo_url, width=100)
-            
-        df_roster = df_j[df_j["Equipo"] == eq_sel].copy()
-        df_roster["TB"] = (df_roster["H"] - df_roster["2B"] - df_roster["3B"] - df_roster["HR"]) + (df_roster["2B"]*2) + (df_roster["3B"]*3) + (df_roster["HR"]*4)
-        df_roster["AVG"] = (df_roster["H"] / df_roster["VB"]).fillna(0).apply(lambda x: f"{x:.3f}")
-        st.dataframe(df_roster[["Nombre", "AVG", "BB", "TB"]], use_container_width=True, hide_index=True)
-    else: st.warning("Cree equipos primero.")
-
-elif menu == "🏆 LÍDERES":
-    st.header("🥇 Líderes de la Temporada")
+if menu == "🏆 LÍDERES":
+    st.header("🥇 Líderes de Bateo")
     jor_max = df_g["Jornada"].max() if not df_g.empty else 1
-    min_vb = st.sidebar.slider("Mínimo VB (Líderes):", 0, 100, int(jor_max * 3)) if st.session_state.admin else int(jor_max * 3)
+    min_vb = st.sidebar.slider("Mínimo VB:", 0, 100, int(jor_max * 3)) if st.session_state.admin else int(jor_max * 3)
 
     df_l = df_j.copy()
-    df_l["TB"] = (df_l["H"] - df_l["2B"] - df_l["3B"] - df_l["HR"]) + (df_l["2B"]*2) + (df_l["3B"]*3) + (df_l["HR"]*4)
     df_l["AVG_NUM"] = (df_l["H"] / df_l["VB"]).fillna(0)
     
-    t1, t2 = st.tabs(["⚾ BATEO", "🎯 PITCHEO"])
-    with t1:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.write("### AVG")
-            lideres_avg = df_l[df_l["VB"] >= min_vb].nlargest(10, 'AVG_NUM').copy()
-            lideres_avg["AVG"] = lideres_avg["AVG_NUM"].apply(lambda x: f"{x:.3f}")
-            st.dataframe(lideres_avg[['Nombre', 'AVG']], hide_index=True)
-        with c2:
-            st.write("### Bases Totales (TB)")
-            st.dataframe(df_l.nlargest(10, 'TB')[['Nombre', 'TB']], hide_index=True)
-        with c3:
-            st.write("### Bases x Bola (BB)")
-            st.dataframe(df_l.nlargest(10, 'BB')[['Nombre', 'BB']], hide_index=True)
+    # Solo AVG, Hits, 2B, 3B y HR como solicitaste
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.write("### AVG")
+        l_avg = df_l[df_l["VB"] >= min_vb].nlargest(10, 'AVG_NUM').copy()
+        l_avg["AVG"] = l_avg["AVG_NUM"].apply(lambda x: f"{x:.3f}")
+        st.dataframe(l_avg[['Nombre', 'AVG']], hide_index=True)
+    with c2:
+        st.write("### Hits (H)"); st.dataframe(df_l.nlargest(10,'H')[['Nombre','H']], hide_index=True)
+    with c3:
+        st.write("### Home Runs"); st.dataframe(df_l.nlargest(10,'HR')[['Nombre','HR']], hide_index=True)
+    
+    st.divider()
+    c4, c5 = st.columns(2)
+    with c4:
+        st.write("### Dobles (2B)"); st.dataframe(df_l.nlargest(10,'2B')[['Nombre','2B']], hide_index=True)
+    with c5:
+        st.write("### Triples (3B)"); st.dataframe(df_l.nlargest(10,'3B')[['Nombre','3B']], hide_index=True)
+
+elif menu == "📋 ROSTERS":
+    st.header("📋 Rosters Detallados")
+    if not df_e.empty:
+        col1, col2 = st.columns([3, 1])
+        eq_sel = col1.selectbox("Seleccione un Equipo:", df_e["Nombre"].unique())
+        l_url = df_e[df_e["Nombre"] == eq_sel]["Logo"].values[0]
+        col2.image(l_url, width=80)
+            
+        df_r = df_j[df_j["Equipo"] == eq_sel].copy()
+        # Cálculos para el Roster
+        # TB = Sencillos(1) + 2B(2) + 3B(3) + HR(4). 
+        # Nota: H ya es el total, por lo que Sencillos = H - 2B - 3B - HR
+        df_r["HT"] = df_r["H"]
+        df_r["TB"] = (df_r["HT"] - df_r["2B"] - df_r["3B"] - df_r["HR"]) + (df_r["2B"]*2) + (df_r["3B"]*3) + (df_r["HR"]*4)
+        df_r["AB"] = df_r["VB"]
+        df_r["AVG"] = (df_r["HT"] / df_r["AB"]).fillna(0).apply(lambda x: f"{x:.3f}")
+        
+        # Orden solicitado: TB, AB, H, 2B, 3B, HR, BB, HT, AVG
+        columnas_roster = ["Nombre", "TB", "AB", "H", "2B", "3B", "HR", "BB", "HT", "AVG"]
+        st.dataframe(df_r[columnas_roster], use_container_width=True, hide_index=True)
+    else: st.warning("No hay equipos registrados.")
+
+elif menu == "🏘️ EQUIPOS":
+    st.header("🏘️ Gestión de Equipos")
+    if st.session_state.admin:
+        t_v, t_n, t_e = st.tabs(["LISTA", "NUEVO", "EDITAR"])
+        with t_v: st.dataframe(df_e, hide_index=True)
+        with t_n:
+            with st.form("n_e"):
+                n, d, l = st.text_input("Nombre"), st.number_input("Debut", 1980, 2026, 2026), st.text_input("Logo URL", LOGO_DEFECTO)
+                if st.form_submit_button("Guardar"):
+                    pd.concat([df_e, pd.DataFrame([{"Nombre":n,"Debut":d,"Logo":l}])], ignore_index=True).to_csv(E_FILE, index=False); st.rerun()
+        with t_e:
+            sel = st.selectbox("Editar:", df_e["Nombre"].unique())
+            idx = df_e[df_e["Nombre"] == sel].index
+            with st.form("e_e"):
+                en = st.text_input("Nombre", df_e.at[idx[0], "Nombre"])
+                ed = st.number_input("Debut", 1980, 2026, int(df_e.at[idx[0], "Debut"]))
+                el = st.text_input("Logo URL", df_e.at[idx[0], "Logo"])
+                if st.form_submit_button("Actualizar"):
+                    df_e.at[idx[0], "Nombre"], df_e.at[idx[0], "Debut"], df_e.at[idx[0], "Logo"] = en, ed, el
+                    df_e.to_csv(E_FILE, index=False); st.rerun()
 
 elif menu == "📊 STANDING":
-    st.header("📊 Tabla de Posiciones 2026")
-    if not df_g.empty and not df_e.empty:
+    st.header("📊 Tabla de Posiciones")
+    if not df_g.empty:
         res = []
         for eq in df_e["Nombre"].unique():
-            v, h = df_g[df_g["Visitante"] == eq], df_g[df_g["HomeClub"] == eq]
-            gan, perd = len(v[v["CV"] > v["CH"]]) + len(h[h["CH"] > h["CV"]]), len(v[v["CV"] < v["CH"]]) + len(h[h["CH"] < h["CV"]])
+            v, h = df_g[df_g["Visitante"]==eq], df_g[df_g["HomeClub"]==eq]
+            g, p = len(v[v["CV"]>v["CH"]]) + len(h[h["CH"]>h["CV"]]), len(v[v["CV"]<v["CH"]]) + len(h[h["CH"]<h["CV"]])
             cf, cc = v["CV"].sum() + h["CH"].sum(), v["CH"].sum() + h["CV"].sum()
-            res.append({"Equipo": eq, "JJ": gan+perd, "G": gan, "P": perd, "AVG": round(gan/(gan+perd),3) if (gan+perd)>0 else 0, "CF": cf, "CC": cc, "DIF": cf-cc})
+            res.append({"Equipo": eq, "G": g, "P": p, "AVG": round(g/(g+p),3) if (g+p)>0 else 0, "CF": cf, "CC": cc, "DIF": cf-cc})
         st.table(pd.DataFrame(res).sort_values(by=["AVG", "DIF"], ascending=False))
 
 elif menu == "✍️ REGISTRAR":
@@ -156,30 +144,26 @@ elif menu == "✍️ REGISTRAR":
         tj, tr = st.tabs(["👤 JUGADORES", "⚾ RESULTADOS"])
         with tj:
             with st.form("rj"):
-                n = st.text_input("Nombre completo")
-                e = st.selectbox("Equipo", df_e["Nombre"].unique()) if not df_e.empty else "N/A"
+                n, e = st.text_input("Nombre"), st.selectbox("Equipo", df_e["Nombre"].unique())
                 v1, v2, v3 = st.columns(3)
                 vb, h, bb = v1.number_input("VB",0), v2.number_input("H (TOTAL)",0), v3.number_input("BB",0)
                 d2, d3, hr = v1.number_input("2B",0), v2.number_input("3B",0), v3.number_input("HR",0)
-                if st.form_submit_button("Guardar Jugador"):
+                if st.form_submit_button("Guardar"):
                     df_j = pd.concat([df_j[df_j["Nombre"]!=n], pd.DataFrame([{"Nombre":n,"Equipo":e,"VB":vb,"H":h,"2B":d2,"3B":d3,"HR":hr,"BB":bb}])], ignore_index=True)
-                    df_j.to_csv(J_FILE, index=False); st.success("Guardado"); st.rerun()
+                    df_j.to_csv(J_FILE, index=False); st.rerun()
         with tr:
             with st.form("rs"):
-                j, v = st.number_input("Jornada",1), st.selectbox("Visitante", df_e["Nombre"].unique())
-                cv = st.number_input("Carreras Vis",0)
-                hc = st.selectbox("Home Club", df_e["Nombre"].unique())
-                ch = st.number_input("Carreras HC",0)
-                if st.form_submit_button("Guardar Score"):
+                j, v, cv = st.number_input("Jornada",1), st.selectbox("Vis", df_e["Nombre"].unique()), st.number_input("CV",0)
+                hc, ch = st.selectbox("HC", df_e["Nombre"].unique()), st.number_input("CH",0)
+                if st.form_submit_button("Guardar"):
                     pd.concat([df_g, pd.DataFrame([{"Jornada":j,"Visitante":v,"CV":cv,"HomeClub":hc,"CH":ch}])], ignore_index=True).to_csv(G_FILE, index=False); st.rerun()
 
 elif menu == "🗑️ BORRAR":
     if st.session_state.admin:
-        sel = st.selectbox("Seleccione para eliminar:", sorted(df_j["Nombre"].unique()))
-        if st.button("Confirmar Borrado", type="primary"):
+        sel = st.selectbox("Eliminar:", sorted(df_j["Nombre"].unique()))
+        if st.button("Confirmar", type="primary"):
             df_j[df_j["Nombre"]!=sel].to_csv(J_FILE, index=False); st.rerun()
 
 elif menu == "💾 RESPALDO":
     if st.session_state.admin:
-        st.download_button("Descargar CSV Jugadores", df_j.to_csv(index=False), "jugadores.csv")
-        st.download_button("Descargar CSV Equipos", df_e.to_csv(index=False), "equipos.csv")
+        st.download_button("Descargar Jugadores", df_j.to_csv(index=False), "jugadores.csv")
